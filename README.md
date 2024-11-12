@@ -17,7 +17,7 @@ cat input | make run
 echo "line1\nline2" | make run
 ```
 
-## Use bootstrap to start with a mini ocaml project
+## Use bootstrap to start with a mini ocaml or python project
 
 ```sh
 python3 ./bootstrap.py
@@ -27,6 +27,13 @@ python3 ./bootstrap.py
 
 ```sh
 ./goto.sh
+```
+
+## And you may use today-ocaml or today-python as shortcuts
+
+```sh
+./today_ocaml.sh
+./today_python.sh
 ```
 
 ## Have fun!
