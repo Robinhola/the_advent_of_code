@@ -21,4 +21,10 @@ echo "line1\nline2" | make run
 python3 ./bootstrap.py
 ```
 
+## Use goto.sh to navigate quickly between days
+
+```sh
+./goto.sh
+```
+
 ## Have fun!
