@@ -9,25 +9,7 @@ let parse lines =
   List.map lines ~f:(fun line -> String.split line ~on:' ' |> List.map ~f:Int.of_string)
 ;;
 
-let rec is_all direction l =
-  match direction, l with
-  | `Decreasing, a :: b :: rest -> a < b && is_all direction (b :: rest)
-  | `Increasing, a :: b :: rest -> a > b && is_all direction (b :: rest)
-  | _ -> true
-;;
-
-let rec is_within ~n = function
-  | a :: b :: rest -> abs (a - b) <= n && is_within ~n (b :: rest)
-  | _ -> true
-;;
-
-let part1 (lines : string list) =
-  let l = parse lines in
-  List.count l ~f:(fun line ->
-    (is_all `Decreasing line || is_all `Increasing line) && is_within ~n:3 line)
-;;
-
-let rec is_all'' ?(can_skip = true) ~f = function
+let rec is_all'' ~can_skip ~f = function
   | _ :: [] | [] -> raise_s [%message "Should not happen"]
   | [ a; b ] -> f a b || can_skip
   | a :: b :: c :: rest ->
@@ -40,16 +22,38 @@ let rec is_all'' ?(can_skip = true) ~f = function
            || is_all'' ~can_skip:false ~f (a :: b :: rest)))
 ;;
 
-let decrease a b = a < b && abs (b - a) <= 3
-let increase a b = a > b && abs (b - a) <= 3
+type test =
+  | And of test * test
+  | Test of (int -> int -> bool)
 
-let all_follows_one_of tests levels =
-  let apply f = is_all'' ~f levels in
+let rec apply_test test a b =
+  match test with
+  | And (ta, tb) -> apply_test ta a b && apply_test tb a b
+  | Test t -> t a b
+;;
+
+let decr = Test (fun a b -> a > b)
+let incr = Test (fun a b -> a < b)
+let less_than n = Test (fun a b -> abs (a - b) <= n)
+
+let all_follows_one_of' ?(can_skip = true) tests levels =
+  let apply t = is_all'' ~can_skip ~f:(apply_test t) levels in
   List.exists tests ~f:apply
 ;;
 
+let part1 (lines : string list) =
+  List.count
+    ~f:
+      (all_follows_one_of'
+         ~can_skip:false
+         [ And (decr, less_than 3); And (incr, less_than 3) ])
+    (parse lines)
+;;
+
 let part2 (lines : string list) =
-  List.count ~f:(all_follows_one_of [ decrease; increase ]) (parse lines)
+  List.count
+    ~f:(all_follows_one_of' [ And (decr, less_than 3); And (incr, less_than 3) ])
+    (parse lines)
 ;;
 
 let%expect_test _ =
