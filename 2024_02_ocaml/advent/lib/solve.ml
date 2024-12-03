@@ -27,29 +27,24 @@ let part1 (lines : string list) =
     (is_all `Decreasing line || is_all `Increasing line) && is_within ~n:3 line)
 ;;
 
-let rec is_all' ?(prev = None) ?(can_skip = true) ~f l =
-  match l with
-  | [] -> raise_s [%message "Should not be empty"]
-  | _ :: [] -> true
-  | a :: b :: rest ->
-    let is_level_valid =
-      match prev with
-      | None -> f a b
-      | Some prev -> f prev a && f a b
-    in
-    (match is_level_valid, can_skip with
-     | false, false -> false
-     | true, _ -> is_all' ~prev:(Some a) ~f ~can_skip (b :: rest)
-     | false, true ->
-       is_all' ~prev ~f ~can_skip:false (a :: rest)
-       || is_all' ~prev ~f ~can_skip:false (b :: rest))
+let rec is_all'' ?(can_skip = true) ~f = function
+  | _ :: [] | [] -> raise_s [%message "Should not happen"]
+  | [ a; b ] -> f a b || can_skip
+  | a :: b :: c :: rest ->
+    (match f a b && f b c with
+     | true -> is_all'' ~can_skip ~f (b :: c :: rest)
+     | false ->
+       can_skip
+       && (is_all'' ~can_skip:false ~f (a :: c :: rest)
+           || is_all'' ~can_skip:false ~f (b :: c :: rest)
+           || is_all'' ~can_skip:false ~f (a :: b :: rest)))
 ;;
 
 let decrease a b = a < b && abs (b - a) <= 3
 let increase a b = a > b && abs (b - a) <= 3
 
 let all_follows_one_of tests levels =
-  let apply f = is_all' ~f levels in
+  let apply f = is_all'' ~f levels in
   List.exists tests ~f:apply
 ;;
 
