@@ -55,8 +55,8 @@ type dir =
   | Up_right
   | Up_left
   | Down_right
-  | DownUp_left
-[@@deriving enumerate]
+  | Down_left
+[@@deriving sexp, enumerate]
 
 let next max_coord coord direction =
   let mx, my = to_tuple max_coord in
@@ -70,7 +70,7 @@ let next max_coord coord direction =
     | Up_right -> 1, -1
     | Up_left -> -1, -1
     | Down_right -> 1, 1
-    | DownUp_left -> -1, 1
+    | Down_left -> -1, 1
   in
   match x + ox, y + oy with
   | nx, ny when Int.equal nx x && Int.equal ny y -> None
@@ -108,10 +108,67 @@ let part1 (lines : string list) =
       |> List.sum (module Int) ~f:Fn.id)
 ;;
 
-let part2 (_lines : string list) = 0
+let other_way = function
+  | Up -> Down
+  | Down -> Up
+  | Left -> Right
+  | Right -> Left
+  | Up_right -> Down_left
+  | Up_left -> Down_right
+  | Down_right -> Up_left
+  | Down_left -> Up_right
+;;
+
+let start_of max_coord coord dir =
+  let dir = other_way dir in
+  next max_coord coord dir
+;;
+
+let xlook ~matrix (center : coord) =
+  let chars = "MAS" |> String.to_list in
+  let is_valid direction =
+    let coord = start_of matrix.dims center direction in
+    Option.map coord ~f:(fun coord -> look ~matrix coord direction chars |> Int.equal 1)
+    |> Option.value ~default:false
+  in
+  [ Down_right, Up_right; Up_right, Up_left; Up_left, Down_left; Down_left, Down_right ]
+  |> List.filter_map ~f:(fun (a, b) ->
+    if is_valid a && is_valid b
+    then (
+      let result = center, a, b in
+      Some result)
+    else None)
+;;
+
+let part2' (lines : string list) =
+  let matrix = parse' lines in
+  let coords =
+    List.cartesian_product (List.range 0 matrix.dims.x) (List.range 0 matrix.dims.y)
+  in
+  List.map coords ~f:(fun (x, y) ->
+    let coord = { Coord.x; y } in
+    xlook ~matrix coord)
+;;
+
+let part2 (lines : string list) = List.sum (module Int) (part2' lines) ~f:List.length
 
 let%expect_test _ =
-  let result = sample_1 |> part1 in
-  print_s [%message (result : int)];
-  [%expect {| (result 18) |}]
+  print_s [%message (part1 sample_1 : int)];
+  part2' sample_1
+  |> List.filter ~f:(Fn.compose not List.is_empty)
+  |> List.concat
+  |> List.iter ~f:(fun xmas -> print_s [%message (xmas : coord * dir * dir)]);
+  [%expect
+    {|
+    ("part1 sample_1" 18)
+    (xmas (((x 1) (y 7)) Up_right Up_left))
+    (xmas (((x 2) (y 1)) Down_right Up_right))
+    (xmas (((x 2) (y 3)) Down_right Up_right))
+    (xmas (((x 3) (y 7)) Up_right Up_left))
+    (xmas (((x 4) (y 3)) Up_left Down_left))
+    (xmas (((x 5) (y 7)) Up_right Up_left))
+    (xmas (((x 6) (y 2)) Down_left Down_right))
+    (xmas (((x 7) (y 2)) Up_right Up_left))
+    (xmas (((x 7) (y 7)) Up_right Up_left))
+    |}]
 ;;
