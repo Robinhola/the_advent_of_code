@@ -14,3 +14,4 @@ type t =
 
 val for_all : f:(t -> 'a) -> 'a list
 val other_way : t -> t
+val rotate : t -> t

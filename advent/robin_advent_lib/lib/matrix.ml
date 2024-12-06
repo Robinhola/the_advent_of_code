@@ -38,3 +38,6 @@ let all_indices t =
   List.cartesian_product (List.range 0 t.dims.x) (List.range 0 t.dims.y)
   |> List.map ~f:Coord.of_tuple
 ;;
+
+let get t (coord : Coord.t) = t.words.(coord.y).(coord.x)
+let set t (coord : Coord.t) value = Array.set t.words.(coord.y) coord.x value

@@ -1,5 +1,10 @@
+all: build test install
+
 build:
-	cd robin_advent_lib; dune build; opam install .
+	cd robin_advent_lib; dune build
+
+install:
+	cd robin_advent_lib; opam install .
 
 run: build
 	cd robin_advent_lib; dune exec robin_advent_lib

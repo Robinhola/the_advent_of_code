@@ -25,28 +25,7 @@ type state =
   }
 [@@deriving sexp]
 
-let set (matrix : Matrix.t) coord value =
-  let x, y = Coord.to_tuple coord in
-  Array.set matrix.words.(y) x value
-;;
-
-let get (matrix : Matrix.t) coord =
-  let x, y = Coord.to_tuple coord in
-  matrix.words.(y).(x)
-;;
-
-let is_obstacle state coord = get state coord |> Char.equal '#'
-
-let rotate = function
-  | Dir.Up -> Dir.Right
-  | Right -> Dir.Down
-  | Down -> Dir.Left
-  | Left -> Dir.Up
-  | Up_right -> Down_right
-  | Down_right -> Down_left
-  | Down_left -> Up_left
-  | Up_left -> Up_right
-;;
+let is_obstacle state coord = Matrix.get state coord |> Char.equal '#'
 
 let make l : state =
   let matrix = Matrix.parse l in
@@ -56,7 +35,7 @@ let make l : state =
       let x, y = Coord.to_tuple coord in
       Char.equal matrix.words.(y).(x) '^')
   in
-  let () = set matrix guard '.' in
+  let () = Matrix.set matrix guard '.' in
   let dir = Dir.Up in
   let visited = Coord.Hashtbl.of_alist_exn [ guard, [ Dir.Up ] ] in
   let possible_obstructions = Coord.Hash_set.create () in
@@ -68,7 +47,7 @@ let rec move state =
   match next_move with
   | None -> `Not_loop state
   | Some c when is_obstacle state.matrix c ->
-    let dir = rotate state.dir in
+    let dir = Dir.rotate state.dir in
     let guard = state.guard in
     move { state with dir; guard }
   | Some c ->
@@ -82,14 +61,14 @@ let rec move state =
 
 let find_all_loops (state : state) (og_guard : Coord.t) =
   let would_create_a_loop coord =
-    set state.matrix coord '#';
+    Matrix.set state.matrix coord '#';
     let visited = Coord.Hashtbl.of_alist_exn [ og_guard, [ Dir.Up ] ] in
     let () =
       match move { state with guard = og_guard; dir = Dir.Up; visited } with
       | `Not_loop _ -> ()
       | `Loop -> Hash_set.add state.possible_obstructions coord
     in
-    set state.matrix coord '.'
+    Matrix.set state.matrix coord '.'
   in
   state.visited
   |> Hashtbl.keys
