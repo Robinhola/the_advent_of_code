@@ -63,49 +63,63 @@ let make l : state =
   { matrix; guard; dir; visited; possible_obstructions }
 ;;
 
-let would_loop state =
-  (* whether adding an obstacle would lead to an already visited path with new dir *)
-  let diversion = rotate state.dir in
-  let if_diverted = Matrix.next state.matrix state.guard diversion in
-  let diverted_path =
-    let%bind.Option if_diverted = if_diverted in
-    Hashtbl.find_multi state.visited if_diverted |> List.find ~f:(Dir.equal diversion)
-  in
-  Option.is_some diverted_path
-;;
-
 let rec move state =
   let next_move = Matrix.next state.matrix state.guard state.dir in
   match next_move with
-  | None -> state
+  | None -> `Not_loop state
   | Some c when is_obstacle state.matrix c ->
     let dir = rotate state.dir in
     let guard = state.guard in
     move { state with dir; guard }
   | Some c ->
-    if would_loop state then Hash_set.add state.possible_obstructions c;
-    Hashtbl.add_multi state.visited ~key:c ~data:state.dir;
-    let guard = c in
-    move { state with guard }
+    if Hashtbl.find_multi state.visited c |> List.exists ~f:(Dir.equal state.dir)
+    then `Loop
+    else (
+      Hashtbl.add_multi state.visited ~key:c ~data:state.dir;
+      let guard = c in
+      move { state with guard })
+;;
+
+let find_all_loops (state : state) (og_guard : Coord.t) =
+  let would_create_a_loop coord =
+    set state.matrix coord '#';
+    let visited = Coord.Hashtbl.of_alist_exn [ og_guard, [ Dir.Up ] ] in
+    let () =
+      match move { state with guard = og_guard; dir = Dir.Up; visited } with
+      | `Not_loop _ -> ()
+      | `Loop -> Hash_set.add state.possible_obstructions coord
+    in
+    set state.matrix coord '.'
+  in
+  state.visited
+  |> Hashtbl.keys
+  |> List.filter ~f:(Fn.compose not (Coord.equal og_guard))
+  |> List.iter ~f:would_create_a_loop
 ;;
 
 let part1 (lines : string list) =
   let state = make lines in
-  let final_state = move state in
-  Hashtbl.length final_state.visited
+  match move state with
+  | `Loop -> raise_s [%message "Found a loop in part1"]
+  | `Not_loop final_state -> Hashtbl.length final_state.visited
 ;;
 
 let part2 (lines : string list) =
   let state = make lines in
-  let final_state = move state in
+  let final_state =
+    match move state with
+    | `Loop -> raise_s [%message "Found a loop in part2"]
+    | `Not_loop final_state -> final_state
+  in
+  find_all_loops final_state state.guard;
   Hash_set.length final_state.possible_obstructions
 ;;
 
 let%expect_test _ =
   let state = make sample_1 in
+  print_s [%message (state : state)];
   let result1 = part1 sample_1 in
   let result2 = part2 sample_1 in
-  print_s [%message (state : state)];
   print_s [%message (result1 : int)];
   print_s [%message (result2 : int)];
   [%expect
@@ -121,6 +135,6 @@ let%expect_test _ =
       (guard ((x 4) (y 6))) (dir Up) (visited ((((x 4) (y 6)) (Up))))
       (possible_obstructions ())))
     (result1 41)
-    (result2 3)
+    (result2 6)
     |}]
 ;;
