@@ -8,15 +8,19 @@ type t =
 [@@deriving sexp, compare, equal, hash]
 
 module Hash_set : sig
-  include Hash_set.S
+  include Hash_set.S with type elt := t
+end
+
+module Hashtbl : sig
+  include Hashtbl.S with type key := t
 end
 
 module Map : sig
-  include Map.S
+  include Map.S with type Key.t := t
 end
 
 module Set : sig
-  include Set.S
+  include Set.S with type Elt.t := t
 end
 
 val to_tuple : t -> int * int

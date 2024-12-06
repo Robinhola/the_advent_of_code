@@ -10,7 +10,7 @@ type t =
   | Up_left
   | Down_right
   | Down_left
-[@@deriving sexp, enumerate]
+[@@deriving sexp, equal, enumerate]
 
 let for_all ~f = List.map ~f all
 

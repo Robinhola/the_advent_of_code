@@ -11,6 +11,7 @@ end
 
 include T
 module Hash_set = Hash_set.Make (T)
+module Hashtbl = Hashtbl.Make (T)
 module Map = Map.Make (T)
 module Set = Set.Make (T)
 

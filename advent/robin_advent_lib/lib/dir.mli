@@ -10,7 +10,7 @@ type t =
   | Up_left
   | Down_right
   | Down_left
-[@@deriving sexp, enumerate]
+[@@deriving sexp, equal, enumerate]
 
 val for_all : f:(t -> 'a) -> 'a list
 val other_way : t -> t
