@@ -35,8 +35,22 @@ let next t coord direction =
 ;;
 
 let all_indices t =
-  List.cartesian_product (List.range 0 t.dims.x) (List.range 0 t.dims.y)
-  |> List.map ~f:Coord.of_tuple
+  List.cartesian_product (List.range 0 t.dims.y) (List.range 0 t.dims.x)
+  |> List.map ~f:(fun (y, x) -> Coord.{ x; y })
+;;
+
+let%expect_test _ =
+  let t = { words = Array.of_list []; dims = Coord.{ x = 2; y = 3 } } in
+  all_indices t |> List.iter ~f:(fun c -> print_s [%sexp (c : Coord.t)]);
+  [%expect
+    {|
+    ((x 0) (y 0))
+    ((x 1) (y 0))
+    ((x 0) (y 1))
+    ((x 1) (y 1))
+    ((x 0) (y 2))
+    ((x 1) (y 2))
+    |}]
 ;;
 
 let get t (coord : Coord.t) = t.words.(coord.y).(coord.x)
