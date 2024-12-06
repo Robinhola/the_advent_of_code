@@ -55,3 +55,30 @@ let%expect_test _ =
 
 let get t (coord : Coord.t) = t.words.(coord.y).(coord.x)
 let set t (coord : Coord.t) value = Array.set t.words.(coord.y) coord.x value
+
+let%expect_test _ =
+  let t =
+    "....#.....\n\
+     .........#\n\
+     ..........\n\
+     ..#.......\n\
+     .......#..\n\
+     ..........\n\
+     .#..^.....\n\
+     ........#.\n\
+     #.........\n\
+     ......#..."
+    |> String.split_lines
+    |> parse
+  in
+  let open Coord in
+  print_s [%message (get t { x = 4; y = 6 } : char)];
+  print_s [%message (set t { x = 4; y = 6 } 'R' : unit)];
+  print_s [%message (get t { x = 4; y = 6 } : char)];
+  [%expect
+    {|
+    ("get t { x = 4; y = 6 }" ^)
+    ("set t { x = 4; y = 6 } 'R'" ())
+    ("get t { x = 4; y = 6 }" R)
+    |}]
+;;
