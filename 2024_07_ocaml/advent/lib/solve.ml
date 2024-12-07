@@ -28,33 +28,32 @@ let parse l =
       let goal = Int.of_string goal in
       let opes = List.map opes ~f:Int.of_string in
       { goal; opes }
-    | x -> raise_s [%message "Wrong input" (x : string list)])
+    | split -> raise_s [%message (split : string list)])
 ;;
 
-let concat a b = Int.to_string a ^ Int.to_string b |> Int.of_string
-
-let part1 (lines : string list) =
-  let rec can_reach goal current = function
-    | [] -> Int.equal goal current
-    | a :: rest -> can_reach goal (current + a) rest || can_reach goal (current * a) rest
-  in
-  let inputs = parse lines in
-  let valid = List.filter inputs ~f:(fun input -> can_reach input.goal 0 input.opes) in
-  List.sum (module Int) valid ~f:(fun input -> input.goal)
+let apply a b = function
+  | `Mul -> a * b
+  | `Add -> a + b
+  | `Con ->
+    let open Int in
+    String.concat [ to_string a; to_string b ] |> of_string
 ;;
 
-let part2 (lines : string list) =
-  let rec can_reach goal current = function
-    | [] -> Int.equal goal current
-    | a :: rest ->
-      can_reach goal (current + a) rest
-      || can_reach goal (current * a) rest
-      || can_reach goal (concat current a) rest
-  in
-  let inputs = parse lines in
-  let valid = List.filter inputs ~f:(fun input -> can_reach input.goal 0 input.opes) in
-  List.sum (module Int) valid ~f:(fun input -> input.goal)
+let rec can_reach goal current ops = function
+  | [] -> Int.equal goal current
+  | a :: rest ->
+    List.exists ops ~f:(fun op -> can_reach goal (apply current a op) ops rest)
 ;;
+
+let partx (lines : string list) ops =
+  lines
+  |> parse
+  |> List.filter ~f:(fun input -> can_reach input.goal 0 ops input.opes)
+  |> List.sum (module Int) ~f:(fun input -> input.goal)
+;;
+
+let part1 (lines : string list) = partx lines [ `Mul; `Add ]
+let part2 (lines : string list) = partx lines [ `Mul; `Add; `Con ]
 
 let%expect_test _ =
   print_s [%message (part1 sample_1 : int)];
