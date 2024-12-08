@@ -18,14 +18,14 @@ module Set = Set.Make (T)
 let to_tuple t = t.x, t.y
 let of_tuple (x, y) = { x; y }
 
-let offset a b =
+let offset ~from:a ~to_:b =
   let x = b.x - a.x in
   let y = b.y - a.y in
   { x; y }
 ;;
 
-let apply b ~offset =
-  let x = b.x + offset.x in
-  let y = b.y + offset.y in
+let apply from ~offset =
+  let x = from.x + offset.x in
+  let y = from.y + offset.y in
   { x; y }
 ;;
