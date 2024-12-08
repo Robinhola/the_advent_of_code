@@ -78,8 +78,19 @@ let is_valid t =
   | _ -> false
 ;;
 
+let get' state c = Hashtbl.find_or_add state.registers c ~default:(Fn.const 0)
+let get state s = get' state (Char.of_string s)
+
 let rec read i state =
-  let instruction = state.instructions.(state.current) in
+  let out value =
+    match value, state.expecting with
+    | 0, `ToStart | 0, `Zero ->
+      read (i + 1) (next { state with expecting = `One; count = state.count + 1 })
+    | 1, `One -> read (i + 1) (next { state with expecting = `Zero })
+    | x, expecting ->
+      print_s [%message (x : int) (expecting : [ `Zero | `ToStart | `One ])];
+      `Invalid state
+  in
   if state.current >= Array.length state.instructions
   then `Invalid state
   else if i % 181 |> Int.equal 0 && is_invalid state
@@ -87,28 +98,18 @@ let rec read i state =
   else if i % 181 |> Int.equal 0 && is_valid state
   then `Valid state
   else (
-    match instruction with
+    match state.instructions.(state.current) with
     | Cpy (n, r) when Int.of_string_opt n |> Option.is_some ->
       Hashtbl.set ~key:r ~data:(Int.of_string n) state.registers;
       read (i + 1) (next state)
     | Cpy (s, d) ->
-      Hashtbl.set
-        ~key:d
-        ~data:
-          (Hashtbl.find_or_add state.registers (Char.of_string s) ~default:(Fn.const 0))
-        state.registers;
+      Hashtbl.set ~key:d ~data:(get state s) state.registers;
       read (i + 1) (next state)
     | Inc r ->
-      Hashtbl.set
-        ~key:r
-        ~data:(Hashtbl.find_or_add state.registers r ~default:(Fn.const 0) + 1)
-        state.registers;
+      Hashtbl.set ~key:r ~data:(get' state r + 1) state.registers;
       read (i + 1) (next state)
     | Dec r ->
-      Hashtbl.set
-        ~key:r
-        ~data:(Hashtbl.find_or_add state.registers r ~default:(Fn.const 0) - 1)
-        state.registers;
+      Hashtbl.set ~key:r ~data:(get' state r - 1) state.registers;
       read (i + 1) (next state)
     | Jnz (r, n) when Int.of_string_opt r |> Option.is_some ->
       let value = Int.of_string r in
@@ -116,33 +117,17 @@ let rec read i state =
       then read (i + 1) (next state)
       else read (i + 1) { state with current = state.current + n }
     | Jnz (r, n) ->
-      let value =
-        Hashtbl.find_or_add state.registers (Char.of_string r) ~default:(Fn.const 0)
-      in
+      let value = get state r in
       if Int.equal 0 value
       then read (i + 1) (next state)
       else read (i + 1) { state with current = state.current + n }
     | Out r when Int.of_string_opt r |> Option.is_some ->
       print_endline r;
-      (match r, state.expecting with
-       | "1", `One -> read (i + 1) (next { state with expecting = `Zero })
-       | "0", `Zero | "0", `ToStart ->
-         read (i + 1) (next { state with expecting = `One; count = state.count + 1 })
-       | x, expecting ->
-         print_s [%message (x : string) (expecting : [ `Zero | `ToStart | `One ])];
-         `Invalid state)
+      out (Int.of_string r)
     | Out r ->
-      let value =
-        Hashtbl.find_or_add state.registers (Char.of_string r) ~default:(Fn.const 0)
-      in
+      let value = get state r in
       print_endline (Int.to_string value);
-      (match value, state.expecting with
-       | 1, `One -> read (i + 1) (next { state with expecting = `Zero })
-       | 0, `Zero | 0, `ToStart ->
-         read (i + 1) (next { state with expecting = `One; count = state.count + 1 })
-       | x, expecting ->
-         print_s [%message (x : int) (expecting : [ `Zero | `ToStart | `One ])];
-         `Invalid state))
+      out value)
 ;;
 
 let rec find_loop lines i =
@@ -157,23 +142,19 @@ let rec find_loop lines i =
 ;;
 
 let part1 (lines : string list) = find_loop lines 0
-
-let part2 (_ : string list) =
-  print_endline "get all the stars to unlock this one";
-  -1
-;;
+let part2 (_ : string list) = -1
 
 let%expect_test _ =
-  print_s [%message (part1 sample_1 : int)];
+  let state = parse sample_1 in
+  print_s [%message (read 1 state : [ `Invalid of state | `Valid of state ])];
   print_s [%message (part2 sample_1 : int)];
   [%expect
     {|
-    (invalid
-     (state
+    ("read 1 state"
+     (Invalid
       ((registers ((a 42)))
        (instructions ((Cpy 41 a) (Inc a) (Inc a) (Dec a) (Jnz a 2) (Dec a)))
-       (current 6) (expecting ToStart) (seen (((x 4) (y 42)))))))
-    ("part1 sample_1" 0)
-    ("part2 sample_1" 0)
+       (current 6) (expecting ToStart) (seen ()) (count 0))))
+    ("part2 sample_1" -1)
     |}]
 ;;
