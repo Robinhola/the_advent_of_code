@@ -82,3 +82,11 @@ let%expect_test _ =
     ("get t { x = 4; y = 6 }" R)
     |}]
 ;;
+
+let within_bounds t (c : Coord.t) =
+  let m = t.dims in
+  not (c.x < 0 || c.y < 0 || c.x >= m.x || c.y >= m.y)
+;;
+
+let to_strings t = Array.to_list t.words |> List.map ~f:String.of_array
+let print t = to_strings t |> List.iter ~f:print_endline

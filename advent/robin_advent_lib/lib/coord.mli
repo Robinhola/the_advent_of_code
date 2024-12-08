@@ -25,3 +25,5 @@ end
 
 val to_tuple : t -> int * int
 val of_tuple : int * int -> t
+val offset : t -> t -> t
+val apply : t -> offset:t -> t

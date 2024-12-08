@@ -42,70 +42,53 @@ let parse l =
   { matrix; antennas }
 ;;
 
-let offset (a : Coord.t) (b : Coord.t) =
-  let x = b.x - a.x in
-  let y = b.y - a.y in
-  Coord.{ x; y }
-;;
-
-let apply (b : Coord.t) (offset : Coord.t) =
-  let x = b.x + offset.x in
-  let y = b.y + offset.y in
-  Coord.{ x; y }
-;;
-
-let within_bounds (matrix : Matrix.t) (c : Coord.t) =
-  let mx, my = Coord.to_tuple matrix.dims in
-  match Coord.to_tuple c with
-  | x, y when x < 0 || y < 0 -> false
-  | x, y when x >= mx || y >= my -> false
-  | _ -> true
-;;
-
-let part1 (lines : string list) =
-  let t = parse lines in
-  let antipods =
-    List.cartesian_product t.antennas t.antennas
-    |> List.filter_map ~f:(fun (a, b) ->
-      if Char.equal a.value b.value && not (Coord.equal a.pos b.pos)
-      then (
-        let a = a.pos in
-        let b = b.pos in
-        let antipod = apply b (offset a b) in
-        Option.some_if (within_bounds t.matrix antipod) antipod)
-      else None)
-    |> Coord.Set.of_list
-  in
-  Set.length antipods
-;;
-
 let rec antipods t start offset current =
-  let antipod = apply start offset in
-  if within_bounds t.matrix antipod
+  let antipod = Coord.apply start ~offset in
+  if Matrix.within_bounds t.matrix antipod
   then antipods t antipod offset (antipod :: current)
   else current
 ;;
 
-let antipods' t =
+let antipods' t with_resonance (a, b) =
+  if Char.equal a.value b.value && not (Coord.equal a.pos b.pos)
+  then (
+    let a = a.pos in
+    let b = b.pos in
+    let offset = Coord.offset a b in
+    let antipod = Coord.apply b ~offset in
+    match with_resonance with
+    | `Part1 -> Option.some_if (Matrix.within_bounds t.matrix antipod) [ antipod ]
+    | `Part2 -> Some (antipods t b offset [ b ]))
+  else None
+;;
+
+let antipods'' t with_resonance =
   List.cartesian_product t.antennas t.antennas
-  |> List.filter_map ~f:(fun (a, b) ->
-    if Char.equal a.value b.value && not (Coord.equal a.pos b.pos)
-    then (
-      let a = a.pos in
-      let b = b.pos in
-      Some (antipods t b (offset a b) [ b ]))
-    else None)
+  |> List.filter_map ~f:(antipods' t with_resonance)
   |> List.concat
   |> Coord.Set.of_list
 ;;
 
+let partx (lines : string list) with_resonance =
+  let t = parse lines in
+  let antipods = antipods'' t with_resonance in
+  Set.length antipods
+;;
+
+let part1 (lines : string list) = partx lines `Part1
+let part2 (lines : string list) = partx lines `Part2
+
 let%expect_test _ =
+  print_s [%message (part1 sample_1 : int)];
+  print_s [%message (part2 sample_1 : int)];
   let t = parse sample_1 in
-  let antipods = antipods' t in
+  let antipods = antipods'' t `Part2 in
   Set.iter antipods ~f:(fun coord -> Matrix.set t.matrix coord '#');
-  Array.iter t.matrix.words ~f:(fun line -> String.of_array line |> print_endline);
+  Matrix.print t.matrix;
   [%expect
     {|
+    ("part1 sample_1" 14)
+    ("part2 sample_1" 34)
     ##....#....#
     .#.#....#...
     ..#.##....#.
@@ -118,19 +101,5 @@ let%expect_test _ =
     ....#....#..
     .#........#.
     ...#......##
-    |}]
-;;
-
-let part2 (lines : string list) =
-  let t = parse lines in
-  Set.length (antipods' t)
-;;
-
-let%expect_test _ =
-  print_s [%message (part1 sample_1 : int)];
-  print_s [%message (part2 sample_1 : int)];
-  [%expect {|
-    ("part1 sample_1" 14)
-    ("part2 sample_1" 34)
     |}]
 ;;
