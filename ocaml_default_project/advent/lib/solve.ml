@@ -15,5 +15,9 @@ let part2 (lines : string list) =
 
 let%expect_test _ =
   print_s [%message (part1 sample_1 : int)];
-  print_s [%message (part2 sample_1 : int)]
+  print_s [%message (part2 sample_1 : int)];
+  [%expect {|
+    ("part1 sample_1" 0)
+    ("part2 sample_1" 0)
+    |}]
 ;;

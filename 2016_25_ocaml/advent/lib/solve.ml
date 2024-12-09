@@ -87,8 +87,8 @@ let rec read i state =
     | 0, `ToStart | 0, `Zero ->
       read (i + 1) (next { state with expecting = `One; count = state.count + 1 })
     | 1, `One -> read (i + 1) (next { state with expecting = `Zero })
-    | x, expecting ->
-      print_s [%message (x : int) (expecting : [ `Zero | `ToStart | `One ])];
+    | _x, _expecting ->
+      (* print_s [%message (_x : int) (_expecting : [ `Zero | `ToStart | `One ])]; *)
       `Invalid state
   in
   if state.current >= Array.length state.instructions
@@ -122,11 +122,11 @@ let rec read i state =
       then read (i + 1) (next state)
       else read (i + 1) { state with current = state.current + n }
     | Out r when Int.of_string_opt r |> Option.is_some ->
-      print_endline r;
+      (* print_endline r; *)
       out (Int.of_string r)
     | Out r ->
       let value = get state r in
-      print_endline (Int.to_string value);
+      (* print_endline (Int.to_string value); *)
       out value)
 ;;
 
@@ -136,8 +136,8 @@ let rec find_loop lines i =
   match read 1 state with
   | `Keep_going state -> raise_s [%message "Should not happen" (state : state)]
   | `Invalid _ -> find_loop lines (i + 1)
-  | `Valid state ->
-    print_s [%message "valid" (state : state)];
+  | `Valid _state ->
+    (* print_s [%message "valid" (_state : state)]; *)
     i
 ;;
 
