@@ -33,3 +33,5 @@ run:
 		); done; \
 		wait
 
+copy-main:
+	for i in $$(find . -name main.ml | grep -v _build | grep -v default); do cp ocaml_default_project/advent/bin/main.ml $$i; done
