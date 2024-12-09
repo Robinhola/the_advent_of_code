@@ -6,7 +6,7 @@ let sample_1 = {|2333133121414131402|} |> String.split_lines
 type value =
   | Free
   | File of int
-[@@deriving sexp]
+[@@deriving equal, sexp]
 
 type range =
   { value : value
@@ -51,7 +51,33 @@ let to_val' range =
   repeat' ~v:value [] (length range)
 ;;
 
+let is_free a = equal_value Free a.value
+
+let combine a b =
+  if not (is_free a && is_free b)
+  then raise_s [%message "Not free" (a : range) (b : range)]
+  else if not (a.end_ = b.start)
+  then raise_s [%message "Not continuous" (a : range) (b : range)]
+  else { value = Free; start = a.start; end_ = b.end_ }
+;;
+
+let%expect_test _ =
+  let a = { value = Free; start = 0; end_ = 3 } in
+  let b = { value = Free; start = 3; end_ = 5 } in
+  print_s [%message (combine a b : range)];
+  [%expect {| ("combine a b" ((value Free) (start 0) (end_ 5))) |}]
+;;
+
 let sort = List.sort ~compare:(fun left right -> left.start - right.start)
+
+let rec compact left = function
+  | [] -> raise_s [%message "cannot be empty"]
+  | a :: b :: rest when a.end_ = b.start -> compact left (combine a b :: rest)
+  | a :: b :: rest -> compact (a :: left) (b :: rest)
+  | b :: [] -> List.rev (b :: left)
+;;
+
+let sort_and_compact l = sort l |> compact []
 
 let to_string state =
   List.concat [ state.file_blocks; state.free_blocks ]
@@ -160,10 +186,13 @@ let defrag' state = defrag [] state.file_blocks (List.rev state.free_blocks)
 let rec can_move file unused = function
   | [] -> `Cannot_move
   | free :: rest ->
-    (match length file with
-     | x when x = length free -> `Can_move_exactly (free, List.concat [ unused; rest ])
-     | x when x <= length free -> `Can_move (free, unused, rest)
-     | _ -> can_move file (free :: unused) rest)
+    if file.end_ <= free.start
+    then `Cannot_move
+    else (
+      match length file with
+      | x when x = length free -> `Can_move_exactly (free, List.concat [ unused; rest ])
+      | x when x <= length free -> `Can_move (free, unused, rest)
+      | _ -> can_move file (free :: unused) rest)
 ;;
 
 let continuous_defrag state =
@@ -172,17 +201,19 @@ let continuous_defrag state =
       state.file_blocks
       ~init:([], List.rev state.free_blocks)
       ~f:(fun (defragmented, free_blocks) file ->
-        match can_move file [] (sort free_blocks) with
+        match can_move file [] free_blocks with
         | `Cannot_move -> file :: defragmented, free_blocks
         | `Can_move_exactly (free, unused) ->
           (* Need to allocate free space back in both moves *)
           let moved_file = move file ~to_:free in
-          let moved_free = move free ~to_:file in
-          moved_file :: defragmented, moved_free :: unused
+          let freed_room = move free ~to_:file in
+          moved_file :: defragmented, sort_and_compact (freed_room :: unused)
         | `Can_move (free, left, right) ->
           let a, b = split_left free (length file) in
-          let file = move file ~to_:a in
-          file :: defragmented, List.concat [ left; [ b ]; right ])
+          let moved_file = move file ~to_:a in
+          let freed_room = move a ~to_:file in
+          ( moved_file :: defragmented
+          , sort_and_compact (List.concat [ left; [ freed_room; b ]; right ]) ))
   in
   { file_blocks; free_blocks }
 ;;
@@ -204,8 +235,8 @@ let%expect_test _ =
     ("(defrag' state) |> to_string" 0099811188827773336446555566..)
     ("check_sum (defrag' state)" 1928)
     ("(continuous_defrag state) |> to_string"
-     99200.777.44.111..5555.6666.333.8888)
+     00992111777.44.333....5555.6666.....8888..)
     ("part1 sample_1" 1928)
-    ("part2 sample_1" 2597)
+    ("part2 sample_1" 2858)
     |}]
 ;;
