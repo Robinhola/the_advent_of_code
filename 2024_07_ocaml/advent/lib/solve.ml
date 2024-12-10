@@ -31,12 +31,20 @@ let parse l =
     | split -> raise_s [%message (split : string list)])
 ;;
 
+let new_con a b =
+  let rec first_10 x i = if x >= i then first_10 x (i * 10) else i in
+  (first_10 b 1 * a) + b
+;;
+
+let _og_con a b =
+  let open Int in
+  to_string a ^ to_string b |> of_string
+;;
+
 let apply a b = function
   | `Mul -> a * b
   | `Add -> a + b
-  | `Con ->
-    let open Int in
-    String.concat [ to_string a; to_string b ] |> of_string
+  | `Con -> new_con a b
 ;;
 
 let rec can_reach goal current ops = function
@@ -58,7 +66,8 @@ let part2 (lines : string list) = partx lines [ `Mul; `Add; `Con ]
 let%expect_test _ =
   print_s [%message (part1 sample_1 : int)];
   print_s [%message (part2 sample_1 : int)];
-  [%expect {|
+  [%expect
+    {|
     ("part1 sample_1" 3749)
     ("part2 sample_1" 11387)
     |}]
