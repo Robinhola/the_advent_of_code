@@ -42,64 +42,37 @@ let make l : state =
   { matrix; guard; dir; visited; possible_obstructions }
 ;;
 
-let rec _move state =
-  let next_move = Matrix.next state.matrix state.guard state.dir in
-  match next_move with
-  | None -> `Not_loop state.visited
-  | Some c when is_obstacle state.matrix c ->
-    let dir = Dir.rotate state.dir in
-    _move { state with dir }
-  | Some c ->
-    if Map.find_multi state.visited c |> List.exists ~f:(Dir.equal state.dir)
-    then `Loop
-    else (
-      let visited = Map.add_multi state.visited ~key:c ~data:state.dir in
-      let guard = c in
-      _move { state with guard; visited })
-;;
-
-let find_all_loops (state : state) (og_guard : Coord.t) =
-  let would_create_a_loop coord =
-    Matrix.set state.matrix coord '#';
-    let visited = Coord.Map.of_alist_exn [ og_guard, [ Dir.Up ] ] in
-    let () =
-      match _move { state with guard = og_guard; dir = Dir.Up; visited } with
-      | `Not_loop _ -> ()
-      | `Loop -> Hash_set.add state.possible_obstructions coord
-    in
-    Matrix.set state.matrix coord '.'
-  in
-  state.visited
-  |> Map.keys
-  |> List.filter ~f:(Fn.compose not (Coord.equal og_guard))
-  |> List.iter ~f:would_create_a_loop
-;;
+let in_map m c = Map.existsi m ~f:(fun ~key ~data:_ -> Coord.equal c key)
+let in_hashset s c = Hash_set.exists s ~f:(Coord.equal c)
 
 (* Some branches will loop, some branches (like the default one) will end outside *)
 let rec explore_graph state can_change =
   match Matrix.next state.matrix state.guard state.dir with
   | None -> `Not_loop state
   | Some next_pos when is_obstacle state.matrix next_pos ->
-    let dir = Dir.rotate state.dir in
-    explore_graph { state with dir } can_change
+    explore_graph { state with dir = Dir.rotate state.dir } can_change
   | Some next_pos
     when Map.find_multi state.visited next_pos |> List.exists ~f:(Dir.equal state.dir) ->
     `Loop
   | Some next_pos ->
-    if can_change
+    if
+      can_change
+      && (not (in_hashset state.possible_obstructions next_pos))
+      && not (in_map state.visited next_pos)
     then (
       Matrix.set state.matrix next_pos '#';
-      assert (is_obstacle state.matrix next_pos);
       let () =
         match explore_graph state false with
+        | `Loop -> Hash_set.strict_add_exn state.possible_obstructions next_pos
         | `Not_loop _ -> ()
-        | `Loop -> Hash_set.add state.possible_obstructions next_pos
       in
-      assert (is_obstacle state.matrix next_pos);
       Matrix.set state.matrix next_pos '.');
-    let visited = Map.add_multi state.visited ~key:next_pos ~data:state.dir in
-    let guard = next_pos in
-    explore_graph { state with guard; visited } can_change
+    explore_graph
+      { state with
+        guard = next_pos
+      ; visited = Map.add_multi state.visited ~key:next_pos ~data:state.dir
+      }
+      can_change
 ;;
 
 let partx (lines : string list) can_change =
@@ -109,34 +82,12 @@ let partx (lines : string list) can_change =
   | `Not_loop state -> state
 ;;
 
-let part2' (lines : string list) =
-  let state = make lines in
-  let visited =
-    match _move state with
-    | `Loop -> raise_s [%message "Found a loop in part2"]
-    | `Not_loop visited -> visited
-  in
-  find_all_loops { state with visited } state.guard;
-  state
-;;
-
 let part1 (lines : string list) = Map.length (partx lines false).visited
-
-let part2 (lines : string list) =
-  print_endline "######### PART2 ######";
-  let state = partx lines true in
-  print_endline "";
-  print_endline "######### PART2' ######";
-  print_s [%message (Hash_set.length (part2' lines).possible_obstructions : int)];
-  print_endline "";
-  Hash_set.length state.possible_obstructions
-;;
+let part2 (lines : string list) = Hash_set.length (partx lines true).possible_obstructions
 
 let%expect_test _ =
   let state = make sample_1 in
   print_s [%message (state : state)];
-  (* print_s [%message (partx sample_1 false : state)]; *)
-  (* print_s [%message (partx sample_1 true : state)]; *)
   let result1 = part1 sample_1 in
   let result2 = part2 sample_1 in
   print_s [%message (result1 : int)];
@@ -153,10 +104,6 @@ let%expect_test _ =
         (dims ((x 10) (y 10)))))
       (guard ((x 4) (y 6))) (dir Up) (visited ((((x 4) (y 6)) (Up))))
       (possible_obstructions ())))
-    ######### PART2 ######
-
-    ######### PART2' ######
-
     (result1 41)
     (result2 6)
     |}]

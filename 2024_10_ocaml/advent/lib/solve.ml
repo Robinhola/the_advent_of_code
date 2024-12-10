@@ -31,12 +31,12 @@ let next = function
 let rec find m target pos =
   let c = Matrix.get m pos in
   match Char.equal target c, next c with
+  | false, _ -> []
   | true, `Continue n ->
     [ Dir.Up; Dir.Right; Dir.Down; Dir.Left ]
     |> List.filter_map ~f:(Matrix.next m pos)
     |> List.concat_map ~f:(find m n)
   | true, `Done -> [ pos ]
-  | false, _ -> []
 ;;
 
 let partx lines =
