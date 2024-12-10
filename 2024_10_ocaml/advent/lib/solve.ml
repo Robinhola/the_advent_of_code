@@ -14,8 +14,6 @@ let sample_1 =
   |> String.split_lines
 ;;
 
-let parse l = Matrix.parse l
-
 let next = function
   | '0' -> `Continue '1'
   | '1' -> `Continue '2'
@@ -27,7 +25,7 @@ let next = function
   | '7' -> `Continue '8'
   | '8' -> `Continue '9'
   | '9' -> `Done
-  | c -> raise_s [%message (c : char)]
+  | c -> raise_s [%message "Forgot one case" (c : char)]
 ;;
 
 let rec find m target pos =
@@ -37,24 +35,18 @@ let rec find m target pos =
     [ Dir.Up; Dir.Right; Dir.Down; Dir.Left ]
     |> List.filter_map ~f:(Matrix.next m pos)
     |> List.concat_map ~f:(find m n)
-  | true, `Done -> [ Some pos ]
-  | false, _ -> [ None ]
+  | true, `Done -> [ pos ]
+  | false, _ -> []
 ;;
 
-let part1 (lines : string list) =
-  let matrix = parse lines in
-  Matrix.all_indices matrix
-  |> List.map ~f:(fun c -> find matrix '0' c |> List.filter_opt |> Coord.Set.of_list)
-  |> List.sum (module Int) ~f:Set.length
+let partx lines =
+  let matrix = Matrix.parse lines in
+  Matrix.all_indices matrix |> List.map ~f:(find matrix '0')
 ;;
 
-let part2 (lines : string list) =
-  let _ = lines in
-  let matrix = parse lines in
-  Matrix.all_indices matrix
-  |> List.map ~f:(fun c -> find matrix '0' c |> List.filter_opt)
-  |> List.sum (module Int) ~f:List.length
-;;
+let sum = List.sum (module Int)
+let part1 lines = sum (partx lines) ~f:(Fn.compose Set.length Coord.Set.of_list)
+let part2 lines = sum (partx lines) ~f:List.length
 
 let%expect_test _ =
   print_s [%message (part1 sample_1 : int)];
