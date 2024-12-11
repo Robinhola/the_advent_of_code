@@ -46,19 +46,9 @@ let%expect_test _ =
     |}]
 ;;
 
-let part1 (lines : string list) =
-  let nums = parse lines in
-  List.map nums ~f:(fun d -> [ d ])
-  |> List.sum
-       (module Int)
-       ~f:(Fn.compose List.length (Fn.apply_n_times ~n:25 (List.concat_map ~f:split)))
-;;
-
-let batch_size = 5
-
-let partx (nums : int list) =
-  assert (75 % batch_size = 0);
-  let goal = 75 / batch_size in
+let partx ~total_iterations ~batch_size (nums : int list) =
+  assert (total_iterations % batch_size = 0);
+  let goal = total_iterations / batch_size in
   let cache = Coord.Hashtbl.create () in
   let rec partx' ~goal i x =
     let iterations_so_far = i * batch_size in
@@ -82,7 +72,8 @@ let partx (nums : int list) =
   List.sum (module Int) ~f:(partx' ~goal 1) nums
 ;;
 
-let part2 (lines : string list) = parse lines |> partx
+let part1 (lines : string list) = parse lines |> partx ~total_iterations:25 ~batch_size:5
+let part2 (lines : string list) = parse lines |> partx ~total_iterations:75 ~batch_size:3
 
 let%expect_test _ =
   print_s [%message (part1 sample_1 : int)];
