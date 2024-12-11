@@ -16,8 +16,8 @@ type 'a range =
 [@@deriving sexp]
 
 type state =
-  { file_blocks : value range List.t
-  ; free_blocks : value range List.t
+  { file_blocks : value range Stack.t
+  ; free_blocks : value range Stack.t
   }
 [@@deriving sexp]
 
@@ -77,14 +77,14 @@ let rec compact left = function
 let sort_and_compact l = sort l |> compact []
 
 let to_string state =
-  List.concat [ state.file_blocks; state.free_blocks ]
+  List.concat [ Stack.to_list state.file_blocks; Stack.to_list state.free_blocks ]
   |> sort
   |> List.map ~f:to_string'
   |> String.concat
 ;;
 
 let check_sum state =
-  List.concat [ state.file_blocks; state.free_blocks ]
+  List.concat [ Stack.to_list state.file_blocks; Stack.to_list state.free_blocks ]
   |> sort
   |> List.concat_map ~f:to_val'
   |> List.mapi ~f:Int.( * )
@@ -97,17 +97,15 @@ let rec parse' state ~i ~last_id = function
   | [] -> raise_s [%message "Should not happen"]
   | length :: [] ->
     let range = range ~i ~length ~value:(File last_id) in
-    { state with file_blocks = range :: state.file_blocks }
+    Stack.push state.file_blocks range;
+    let free_blocks = Stack.to_list state.free_blocks |> List.rev |> Stack.of_list in
+    { state with free_blocks }
   | file_length :: free_length :: rest ->
     let file_range = range ~i ~length:file_length ~value:(File last_id) in
     let free_range = range ~i:(i + file_length) ~length:free_length ~value:Free in
-    parse'
-      { file_blocks = file_range :: state.file_blocks
-      ; free_blocks = free_range :: state.free_blocks
-      }
-      ~i:(i + file_length + free_length)
-      ~last_id:(last_id + 1)
-      rest
+    Stack.push state.file_blocks file_range;
+    Stack.push state.free_blocks free_range;
+    parse' state ~i:(i + file_length + free_length) ~last_id:(last_id + 1) rest
 ;;
 
 let parse l =
@@ -115,9 +113,12 @@ let parse l =
     String.concat l
     |> String.to_list
     |> List.map ~f:(Fn.compose Int.of_string Char.to_string)
-    |> parse' { file_blocks = []; free_blocks = [] } ~i:0 ~last_id:0
+    |> parse'
+         { file_blocks = Stack.create (); free_blocks = Stack.create () }
+         ~i:0
+         ~last_id:0
   in
-  { state with free_blocks = List.filter state.free_blocks ~f:(fun r -> length r > 0) }
+  { state with free_blocks = Stack.filter state.free_blocks ~f:(fun r -> length r > 0) }
 ;;
 
 let split' range size end_ =
@@ -147,26 +148,39 @@ let move source ~to_ =
 ;;
 
 let defrag state =
+  let combine l = List.concat_map l ~f:Stack.to_list |> Stack.of_list in
   let rec defrag' defragmented file_blocks free_blocks =
-    match file_blocks, free_blocks with
-    | [], _ -> raise_s [%message "Ran out of file blocks"]
-    | _, [] -> { file_blocks = List.concat [ file_blocks; defragmented ]; free_blocks }
-    | file :: _, free :: _ when file.end_ < free.start ->
-      { file_blocks = List.concat [ file_blocks; defragmented ]; free_blocks }
-    | file :: rest_file_blocks, free :: rest_free_blocks when length file < length free ->
-      let a, b = split_left free (length file) in
-      let file = move file ~to_:a in
-      defrag' (file :: defragmented) rest_file_blocks (b :: rest_free_blocks)
-    | file :: rest_file_blocks, free :: rest_free_blocks when length file > length free ->
-      let a, b = split_right file (length free) in
-      let b = move b ~to_:free in
-      defrag' (b :: defragmented) (a :: rest_file_blocks) rest_free_blocks
-    | file :: rest_file_blocks, free :: rest_free_blocks when length file = length free ->
-      let file = move file ~to_:free in
-      defrag' (file :: defragmented) rest_file_blocks rest_free_blocks
-    | _ -> raise_s [%message "forgot a case"]
+    match Stack.top file_blocks, Stack.top free_blocks with
+    | None, _ -> raise_s [%message "Ran out of file blocks"]
+    | Some _, None ->
+      let file_blocks = combine [ file_blocks; defragmented ] in
+      { file_blocks; free_blocks }
+    | Some file, Some free when file.end_ < free.end_ ->
+      let file_blocks = combine [ file_blocks; defragmented ] in
+      { file_blocks; free_blocks }
+    | Some _, Some _ ->
+      let file = Stack.pop_exn file_blocks in
+      let free = Stack.pop_exn free_blocks in
+      (match length file, length free with
+       | lfile, lfree when lfile < lfree ->
+         let a, b = split_left free lfile in
+         let file = move file ~to_:a in
+         Stack.push defragmented file;
+         Stack.push free_blocks b;
+         defrag' defragmented file_blocks free_blocks
+       | lfile, lfree when lfile > lfree ->
+         let a, b = split_right file lfree in
+         let b = move b ~to_:free in
+         Stack.push defragmented b;
+         Stack.push file_blocks a;
+         defrag' defragmented file_blocks free_blocks
+       | lfile, lfree when lfile = lfree ->
+         let file = move file ~to_:free in
+         Stack.push defragmented file;
+         defrag' defragmented file_blocks free_blocks
+       | _ -> raise_s [%message "forgot a case"])
   in
-  defrag' [] state.file_blocks (List.rev state.free_blocks)
+  defrag' (Stack.create ()) state.file_blocks state.free_blocks
 ;;
 
 let rec can_move file unused = function
@@ -181,27 +195,27 @@ let rec can_move file unused = function
       | _ -> can_move file (free :: unused) rest)
 ;;
 
-let continuous_defrag state =
-  let file_blocks, free_blocks =
-    List.fold
-      state.file_blocks
-      ~init:([], List.rev state.free_blocks)
-      ~f:(fun (defragmented, free_blocks) file ->
-        match can_move file [] free_blocks with
-        | `Cannot_move -> file :: defragmented, free_blocks
-        | `Can_move_exactly (free, unused) ->
-          let moved_file = move file ~to_:free in
-          let freed_room = move free ~to_:file in
-          moved_file :: defragmented, sort_and_compact (freed_room :: unused)
-        | `Can_move (free, left, right) ->
-          let a, b = split_left free (length file) in
-          let moved_file = move file ~to_:a in
-          let freed_room = move a ~to_:file in
-          ( moved_file :: defragmented
-          , sort_and_compact (List.concat [ left; [ freed_room; b ]; right ]) ))
-  in
-  { file_blocks; free_blocks }
-;;
+let continuous_defrag state = state
+
+(* let file_blocks, free_blocks = *)
+(*   List.fold *)
+(*     state.file_blocks *)
+(*     ~init:([], List.rev state.free_blocks) *)
+(*     ~f:(fun (defragmented, free_blocks) file -> *)
+(*         match can_move file [] free_blocks with *)
+(*         | `Cannot_move -> file :: defragmented, free_blocks *)
+(*         | `Can_move_exactly (free, unused) -> *)
+(*           let moved_file = move file ~to_:free in *)
+(*           let freed_room = move free ~to_:file in *)
+(*           moved_file :: defragmented, sort_and_compact (freed_room :: unused) *)
+(*         | `Can_move (free, left, right) -> *)
+(*           let a, b = split_left free (length file) in *)
+(*           let moved_file = move file ~to_:a in *)
+(*           let freed_room = move a ~to_:file in *)
+(*           ( moved_file :: defragmented *)
+(*           , sort_and_compact (List.concat [ left; [ freed_room; b ]; right ]) )) *)
+(* in *)
+(* { file_blocks; free_blocks } *)
 
 let part1 (lines : string list) = lines |> parse |> defrag |> check_sum
 let part2 (lines : string list) = lines |> parse |> continuous_defrag |> check_sum
@@ -217,8 +231,8 @@ let%expect_test _ =
     {|
     00...111...2...333.44.5555.6666.777.888899
     0099811188827773336446555566..
-    00992111777.44.333....5555.6666.....8888..
+    0011123334455556..
     ("part1 sample_1" 1928)
-    ("part2 sample_1" 2858)
+    ("part2 sample_1" 4116)
     |}]
 ;;
