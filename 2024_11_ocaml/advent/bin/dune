@@ -1,0 +1,4 @@
+(executable
+ (public_name advent)
+ (name main)
+ (libraries advent))
