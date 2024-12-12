@@ -74,7 +74,7 @@ let rec parse pairs rules state lines =
 let compare pairs left right =
   let key = Pair.{ left; right } in
   let rkey = Pair.reverse key in
-  let is_in k = Set.exists pairs ~f:(Pair.equal k) in
+  let is_in k = Set.mem pairs k in
   match is_in key, is_in rkey with
   | true, false -> -1
   | false, true -> 1
