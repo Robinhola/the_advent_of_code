@@ -56,8 +56,7 @@ let rec move state to_ =
   then `Continue state
   else (
     match Coord.apply state.pos ~offset:(offset state.dir 1) with
-    | pos when Hash_set.exists state.seen ~f:(Coord.equal pos) ->
-      `Already_seen { state with pos }
+    | pos when Hash_set.mem state.seen pos -> `Already_seen { state with pos }
     | pos ->
       Hash_set.add state.seen pos;
       move { state with pos } to_)
