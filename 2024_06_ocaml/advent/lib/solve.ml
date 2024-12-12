@@ -21,7 +21,7 @@ type state =
   ; guard : Coord.t
   ; dir : Dir.t
   ; visited : Dir.t list Coord.Map.t
-  ; possible_obstructions : Coord.Hash_set.t
+  ; possible_obstructions : unit Coord.Hashtbl.t
   }
 [@@deriving sexp]
 
@@ -38,12 +38,12 @@ let make l : state =
   let () = Matrix.set matrix guard '.' in
   let dir = Dir.Up in
   let visited = Coord.Map.of_alist_exn [ guard, [ Dir.Up ] ] in
-  let possible_obstructions = Coord.Hash_set.create () in
+  let possible_obstructions = Coord.Hashtbl.create () in
   { matrix; guard; dir; visited; possible_obstructions }
 ;;
 
-let in_map m c = Map.existsi m ~f:(fun ~key ~data:_ -> Coord.equal c key)
-let in_hashset s c = Hash_set.exists s ~f:(Coord.equal c)
+let in_map m c = Map.find m c |> Option.is_some
+let in_hashset s c = Hashtbl.find s c |> Option.is_some
 
 (* Some branches will loop, some branches (like the default one) will end outside *)
 let rec explore_graph state can_change =
@@ -63,7 +63,7 @@ let rec explore_graph state can_change =
       Matrix.set state.matrix next_pos '#';
       let () =
         match explore_graph state false with
-        | `Loop -> Hash_set.strict_add_exn state.possible_obstructions next_pos
+        | `Loop -> Hashtbl.add_exn state.possible_obstructions ~key:next_pos ~data:()
         | `Not_loop _ -> ()
       in
       Matrix.set state.matrix next_pos '.');
@@ -83,7 +83,7 @@ let partx (lines : string list) can_change =
 ;;
 
 let part1 (lines : string list) = Map.length (partx lines false).visited
-let part2 (lines : string list) = Hash_set.length (partx lines true).possible_obstructions
+let part2 (lines : string list) = Hashtbl.length (partx lines true).possible_obstructions
 
 let%expect_test _ =
   let state = make sample_1 in
