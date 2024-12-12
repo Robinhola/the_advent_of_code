@@ -44,15 +44,6 @@ OOOOO|}
 
 let parse lines = Matrix.parse lines
 
-module Side = struct
-  module T = struct
-    type t = Coord.t * Dir.t [@@deriving compare, equal, hash, sexp]
-  end
-
-  include T
-  module Hash_set = Hash_set.Make (T)
-end
-
 let regions m =
   let seen = Coord.Hashtbl.create () in
   let already_seen c = Hashtbl.find seen c |> Option.is_some in
