@@ -10,7 +10,7 @@ type t =
   | Up_left
   | Down_right
   | Down_left
-[@@deriving sexp, equal, enumerate]
+[@@deriving sexp, compare, equal, hash, enumerate]
 
 let for_all ~f = List.map ~f all
 
@@ -35,6 +35,8 @@ let rotate = function
   | Down_left -> Up_left
   | Up_left -> Up_right
 ;;
+
+let rotate_left = Fn.apply_n_times ~n:3 rotate
 
 let%expect_test "Invariant" =
   List.iter all ~f:(fun dir ->

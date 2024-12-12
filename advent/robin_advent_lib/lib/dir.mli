@@ -10,8 +10,9 @@ type t =
   | Up_left
   | Down_right
   | Down_left
-[@@deriving sexp, equal, enumerate]
+[@@deriving sexp, compare, equal, hash, enumerate]
 
 val for_all : f:(t -> 'a) -> 'a list
 val other_way : t -> t
 val rotate : t -> t
+val rotate_left : t -> t
