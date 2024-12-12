@@ -16,6 +16,32 @@ MMMISSJEEE|}
   |> String.split_lines
 ;;
 
+let sample_2 =
+  {|EEEEE
+EXXXX
+EEEEE
+EXXXX
+EEEEE|}
+  |> String.split_lines
+;;
+
+let sample_3 =
+  {|AAAA
+BBCD
+BBCC
+EEEC|}
+  |> String.split_lines
+;;
+
+let sample_4 =
+  {|OOOOO
+OXOXO
+OOOOO
+OXOXO
+OOOOO|}
+  |> String.split_lines
+;;
+
 let parse lines = Matrix.parse lines
 
 let regions m =
@@ -101,22 +127,33 @@ let%expect_test _ =
     |}]
 ;;
 
-let count_sides m coord =
-  let dir =
-    List.find_exn [ Dir.Up; Dir.Right; Dir.Down; Dir.Left ] ~f:(is_side m coord)
-  in
-  let start_dir = dir in
-  let start_coord = coord in
-  let rec count_sides count current dir =
-    let next_c, next_d =
-      List.find_exn (next_side m current dir) ~f:(fun (c, d) -> is_side m c d)
+let count_sides m seen start_coord =
+  match
+    List.find [ Dir.Up; Dir.Right; Dir.Down; Dir.Left ] ~f:(is_side m start_coord)
+  with
+  | None -> 0
+  | Some start_dir ->
+    let rec count_sides count current dir =
+      Hash_set.add seen current;
+      let next_c, next_d =
+        List.find_exn (next_side m current dir) ~f:(fun (c, d) -> is_side m c d)
+      in
+      let count = if Dir.equal dir next_d then count else count + 1 in
+      if Dir.equal start_dir next_d && Coord.equal start_coord next_c
+      then count
+      else count_sides count next_c next_d
     in
-    let count = if Dir.equal dir next_d then count else count + 1 in
-    if Dir.equal start_dir next_d && Coord.equal start_coord next_c
-    then count
-    else count_sides count next_c next_d
-  in
-  count_sides 0 coord dir
+    if Hash_set.mem seen start_coord then 0 else count_sides 0 start_coord start_dir
+;;
+
+let%expect_test _ =
+  let m = parse [ "AAA"; "ABA"; "AAA" ] in
+  print_s [%sexp (count_sides m (Coord.Hash_set.create ()) (Coord.of_tuple (0, 0)) : int)];
+  print_s [%sexp (count_sides m (Coord.Hash_set.create ()) (Coord.of_tuple (0, 1)) : int)];
+  [%expect {|
+    4
+    4
+    |}]
 ;;
 
 let part1 (lines : string list) =
@@ -139,7 +176,8 @@ let part2 (lines : string list) =
     regions
     ~f:(fun r ->
       let area = List.length r in
-      let size = count_sides m (List.hd_exn r) in
+      let seen = Coord.Hash_set.create () in
+      let size = List.sum (module Int) r ~f:(count_sides m seen) in
       area * size)
 ;;
 
@@ -149,16 +187,27 @@ let%expect_test _ =
   print_s [%message (List.map regions ~f:List.length : int list)];
   print_s [%message (List.map regions ~f:(perimiter m) : int list)];
   print_s
-    [%message (List.map regions ~f:(Fn.compose (count_sides m) List.hd_exn) : int list)];
+    [%message
+      (List.map
+         regions
+         ~f:(Fn.compose (count_sides m (Coord.Hash_set.create ())) List.hd_exn)
+       : int list)];
   print_s [%message (part1 sample_1 : int)];
   print_s [%message (part2 sample_1 : int)];
+  print_s [%message (part2 sample_2 : int)];
+  print_s [%message (part2 sample_3 : int)];
+  print_s [%message (part2 sample_4 : int)];
   [%expect
     {|
     ("List.map regions ~f:List.length" (12 4 14 10 13 11 1 13 14 5 3))
     ("List.map regions ~f:(perimiter m)" (18 8 28 18 20 20 4 18 22 12 8))
-    ("List.map regions ~f:(Fn.compose (count_sides m) List.hd_exn)"
+    ( "List.map regions\
+     \n  ~f:(Fn.compose (count_sides m (Coord.Hash_set.create ())) List.hd_exn)"
      (10 4 22 12 10 12 4 8 16 6 6))
     ("part1 sample_1" 1930)
     ("part2 sample_1" 1206)
+    ("part2 sample_2" 236)
+    ("part2 sample_3" 80)
+    ("part2 sample_4" 268)
     |}]
 ;;
