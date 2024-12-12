@@ -44,6 +44,15 @@ OOOOO|}
 
 let parse lines = Matrix.parse lines
 
+module Side = struct
+  module T = struct
+    type t = Coord.t * Dir.t [@@deriving compare, equal, hash, sexp]
+  end
+
+  include T
+  module Hash_set = Hash_set.Make (T)
+end
+
 let regions m =
   let seen = Coord.Hashtbl.create () in
   let already_seen c = Hashtbl.find seen c |> Option.is_some in
@@ -134,7 +143,7 @@ let count_sides m seen start_coord =
   | None -> 0
   | Some start_dir ->
     let rec count_sides count current dir =
-      Hash_set.add seen current;
+      Hash_set.add seen (current, dir);
       let next_c, next_d =
         List.find_exn (next_side m current dir) ~f:(fun (c, d) -> is_side m c d)
       in
@@ -143,14 +152,17 @@ let count_sides m seen start_coord =
       then count
       else count_sides count next_c next_d
     in
-    if Hash_set.mem seen start_coord then 0 else count_sides 0 start_coord start_dir
+    if Hash_set.mem seen (start_coord, start_dir)
+    then 0
+    else count_sides 0 start_coord start_dir
 ;;
 
 let%expect_test _ =
   let m = parse [ "AAA"; "ABA"; "AAA" ] in
-  print_s [%sexp (count_sides m (Coord.Hash_set.create ()) (Coord.of_tuple (0, 0)) : int)];
-  print_s [%sexp (count_sides m (Coord.Hash_set.create ()) (Coord.of_tuple (0, 1)) : int)];
-  [%expect {|
+  print_s [%sexp (count_sides m (Side.Hash_set.create ()) (Coord.of_tuple (0, 0)) : int)];
+  print_s [%sexp (count_sides m (Side.Hash_set.create ()) (Coord.of_tuple (0, 1)) : int)];
+  [%expect
+    {|
     4
     4
     |}]
@@ -176,7 +188,7 @@ let part2 (lines : string list) =
     regions
     ~f:(fun r ->
       let area = List.length r in
-      let seen = Coord.Hash_set.create () in
+      let seen = Side.Hash_set.create () in
       let size = List.sum (module Int) r ~f:(count_sides m seen) in
       area * size)
 ;;
@@ -190,7 +202,7 @@ let%expect_test _ =
     [%message
       (List.map
          regions
-         ~f:(Fn.compose (count_sides m (Coord.Hash_set.create ())) List.hd_exn)
+         ~f:(Fn.compose (count_sides m (Side.Hash_set.create ())) List.hd_exn)
        : int list)];
   print_s [%message (part1 sample_1 : int)];
   print_s [%message (part2 sample_1 : int)];
@@ -202,12 +214,12 @@ let%expect_test _ =
     ("List.map regions ~f:List.length" (12 4 14 10 13 11 1 13 14 5 3))
     ("List.map regions ~f:(perimiter m)" (18 8 28 18 20 20 4 18 22 12 8))
     ( "List.map regions\
-     \n  ~f:(Fn.compose (count_sides m (Coord.Hash_set.create ())) List.hd_exn)"
+     \n  ~f:(Fn.compose (count_sides m (Side.Hash_set.create ())) List.hd_exn)"
      (10 4 22 12 10 12 4 8 16 6 6))
     ("part1 sample_1" 1930)
     ("part2 sample_1" 1206)
     ("part2 sample_2" 236)
     ("part2 sample_3" 80)
-    ("part2 sample_4" 268)
+    ("part2 sample_4" 436)
     |}]
 ;;
