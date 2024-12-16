@@ -42,6 +42,9 @@ let sample_2 =
   |> String.split_lines
 ;;
 
+let min l = List.min_elt ~compare:Int.compare l |> Option.value_exn
+let min' t = Hashtbl.keys t |> min
+
 let rec find ~m ~seen ~bests queue =
   if Queue.is_empty queue
   then bests
@@ -55,7 +58,9 @@ let rec find ~m ~seen ~bests queue =
       find ~m ~seen ~bests queue)
     else if Matrix.get m pos |> Char.equal '#'
     then find ~m ~seen ~bests queue
-    else if Hashtbl.mem seen (pos, dir) && Hashtbl.find_exn seen (pos, dir) < i
+    else if
+      (Hashtbl.mem seen (pos, dir) && Hashtbl.find_exn seen (pos, dir) < i)
+      || (Hashtbl.length bests > 0 && min' bests < i)
     then find ~m ~seen ~bests queue
     else (
       Hashtbl.set seen ~key:(pos, dir) ~data:i;
@@ -73,26 +78,20 @@ let find_start m =
   Matrix.all_indices m |> List.find_exn ~f:(fun c -> Matrix.get m c |> Char.equal 'S')
 ;;
 
-let part1 (lines : string list) =
+let partx lines =
   let m = Matrix.parse lines in
   let seen = Side.Hashtbl.create () in
   let queue =
     Queue.of_list [ find_start m, Dir.Right, 0, Coord.Set.of_list [ find_start m ] ]
   in
-  let bests = find ~m ~seen ~bests:(Int.Table.create ()) queue in
-  bests |> Hashtbl.keys |> List.min_elt ~compare:Int.compare |> Option.value_exn
+  find ~m ~seen ~bests:(Int.Table.create ()) queue
 ;;
 
+let part1 (lines : string list) = min' (partx lines)
+
 let part2 (lines : string list) =
-  let m = Matrix.parse lines in
-  let seen = Side.Hashtbl.create () in
-  let queue =
-    Queue.of_list [ find_start m, Dir.Right, 0, Coord.Set.of_list [ find_start m ] ]
-  in
-  let bests = find ~m ~seen ~bests:(Int.Table.create ()) queue in
-  let best_score =
-    bests |> Hashtbl.keys |> List.min_elt ~compare:Int.compare |> Option.value_exn
-  in
+  let bests = partx lines in
+  let best_score = min' bests in
   Hashtbl.find_exn bests best_score |> Coord.Set.union_list |> Set.length
 ;;
 
