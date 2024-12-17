@@ -10,6 +10,15 @@ Program: 0,1,5,4,3,0|}
   |> String.split_lines
 ;;
 
+let sample_2 =
+  {|Register A: 729
+Register B: 0
+Register C: 0
+
+Program: 0,3,5,4,3,0|}
+  |> String.split_lines
+;;
+
 type parsed = int list * int list [@@deriving sexp]
 
 type instruction =
@@ -54,47 +63,23 @@ let read_operand state operand =
   | _ -> assert false
 ;;
 
-let%expect_test _ =
-  [ 5, 5; 5, 8; 5, 0 ]
-  |> List.iter ~f:(fun (a, b) ->
-    let c = Int.(a lor b) in
-    print_s [%message (a : int) (b : int) (c : int)]);
-  [%expect
-    {|
-    ((a 5) (b 5) (c 5))
-    ((a 5) (b 8) (c 13))
-    ((a 5) (b 0) (c 5))
-    |}]
-;;
-
-let%expect_test _ =
-  [ 5, 5; 5, 8; 5, 0 ]
-  |> List.iter ~f:(fun (a, b) ->
-    let c = Int.(a lxor b) in
-    print_s [%message (a : int) (b : int) (c : int)]);
-  [%expect
-    {|
-    ((a 5) (b 5) (c 0))
-    ((a 5) (b 8) (c 13))
-    ((a 5) (b 0) (c 5))
-    |}]
-;;
-
 let advance state = { state with head = state.head + 2 }
 
-let rec execute state =
+let rec execute state mode =
   let length = Array.length state.instructions in
   if state.head >= length
-  then state, List.rev state.o |> List.map ~f:Int.to_string |> String.concat ~sep:","
+  then (
+    let output =
+      List.rev state.o |> List.map ~f:Int.to_string |> String.concat ~sep:","
+    in
+    state, output)
   else (
-    (* print_s [%message (length : int) (state.head : int)]; *)
     let instruction =
       let opcode = state.instructions.(state.head) in
       let operand = state.instructions.(state.head + 1) in
       to_instruction (opcode, operand)
     in
-    (* print_s [%message (instruction : instruction) (state : state)]; *)
-    let new_state =
+    let state =
       match instruction with
       | Adv x ->
         let combo = read_operand state x in
@@ -122,33 +107,19 @@ let rec execute state =
         let denominator = Int.(2 ** combo) in
         { state with c = numerator / denominator }
     in
-    execute (advance new_state))
-;;
-
-let%expect_test _ =
-  [ { a = 0; b = 0; c = 9; o = []; instructions = [| 2; 6 |]; head = 0 }
-  ; { a = 10; b = 0; c = 0; o = []; instructions = [| 5; 0; 5; 1; 5; 4 |]; head = 0 }
-  ; { a = 2024; b = 0; c = 0; o = []; instructions = [| 0; 1; 5; 4; 3; 0 |]; head = 0 }
-  ; { a = 0; b = 29; c = 0; o = []; instructions = [| 1; 7 |]; head = 0 }
-  ; { a = 0; b = 2024; c = 43690; o = []; instructions = [| 4; 0 |]; head = 0 }
-  ]
-  |> List.iter ~f:(fun state ->
-    let state, out = execute state in
-    print_s [%message (state : state) (out : string)]);
-  [%expect
-    {|
-    ((state ((a 0) (b 1) (c 9) (o ()) (instructions (2 6)) (head 2))) (out ""))
-    ((state
-      ((a 10) (b 0) (c 0) (o (2 1 0)) (instructions (5 0 5 1 5 4)) (head 6)))
-     (out 0,1,2))
-    ((state
-      ((a 0) (b 0) (c 0) (o (0 1 3 7 7 7 7 6 5 2 4)) (instructions (0 1 5 4 3 0))
-       (head 6)))
-     (out 4,2,5,6,7,7,7,7,3,1,0))
-    ((state ((a 0) (b 26) (c 0) (o ()) (instructions (1 7)) (head 2))) (out ""))
-    ((state ((a 0) (b 2024) (c 44354) (o ()) (instructions (4 0)) (head 2)))
-     (out ""))
-    |}]
+    match mode, instruction with
+    | `Strict, Out _ ->
+      let i = List.length state.o - 1 in
+      let last_out = List.hd_exn state.o in
+      let corresponding = state.instructions.(i) in
+      if last_out = corresponding
+      then execute (advance state) mode
+      else (
+        let output =
+          List.rev state.o |> List.map ~f:Int.to_string |> String.concat ~sep:","
+        in
+        state, output)
+    | _, _ -> execute (advance state) mode)
 ;;
 
 let to_state (parsed : parsed) =
@@ -189,23 +160,71 @@ let rec parse left = function
 
 let part1 (lines : string list) =
   let state = parse [] lines in
-  let final_state, out = execute state in
+  let final_state, out = execute state `Normal in
   print_s [%message (final_state : state)];
   print_endline out;
   0
 ;;
 
 let part2 (lines : string list) =
-  let _ = lines in
-  0
+  let state = parse [] lines in
+  (* Use this to find values corresponding to your input *)
+  [ "0"; "1"; "2"; "3"; "4"; "5,1,5,0,3"; "4,5,5,3,0"; "1,7" ]
+  |> List.iter ~f:(fun pattern ->
+    let rec look a =
+      let _, o = execute { state with a } `Normal in
+      if String.substr_index o ~pattern |> Option.is_some
+      then print_s [%message "Found" (pattern : string) (o : string) (a : int)]
+      else look (a + 1)
+    in
+    look 1);
+  let open Int in
+  (* Add and shift these values *)
+  let instructions =
+    state.instructions
+    |> Array.to_list
+    |> List.map ~f:Int.to_string
+    |> String.concat ~sep:","
+  in
+  let a =
+    [ 0
+      (* did not manage to get closer *)
+      (* ; 332 *)
+    ; 27 * (8 ** 3)
+    ; 61860 * (8 ** 5)
+    ; 19152 * (8 ** 11)
+    ]
+    |> List.sum (module Int) ~f:Fn.id
+  in
+  let _, o = execute { state with a } `Normal in
+  print_endline "--------------- HEHE ----------------";
+  print_endline instructions;
+  print_endline o;
+  let rec find a =
+    match execute { state with a } `Strict with
+    | _, o when String.equal o instructions ->
+      print_s [%message "Got a match!" (o : string) (a : int)];
+      a
+    | _ -> find (a + 1)
+  in
+  find a
 ;;
 
 let%expect_test _ =
+  let state = parse [] sample_2 in
+  print_s [%message (execute { state with a = 117440 } `Normal : state * string)];
   print_s [%message (parse [] sample_1 : state)];
   print_s [%message (part1 sample_1 : int)];
-  print_s [%message (part2 sample_1 : int)];
+  print_s [%message (execute { state with a = 3 } `Normal : state * string)];
+  print_s [%message (execute { state with a = (3 * 8) + 4 } `Normal : state * string)];
+  print_s
+    [%message
+      (execute { state with a = (3 * 8 * 8) + (4 * 8) + 5 } `Normal : state * string)];
   [%expect
     {|
+    ("execute { state with a = 117440 } `Normal"
+     (((a 0) (b 0) (c 0) (o (0 3 4 5 3 0)) (instructions (0 3 5 4 3 0)) (head 6))
+      0,3,5,4,3,0))
     ("parse [] sample_1"
      ((a 729) (b 0) (c 0) (o ()) (instructions (0 1 5 4 3 0)) (head 0)))
     (final_state
@@ -213,6 +232,12 @@ let%expect_test _ =
       (head 6)))
     4,6,3,5,6,3,5,2,1,0
     ("part1 sample_1" 0)
-    ("part2 sample_1" 0)
+    ("execute { state with a = 3 } `Normal"
+     (((a 0) (b 0) (c 0) (o (0)) (instructions (0 3 5 4 3 0)) (head 6)) 0))
+    ("execute { state with a = ((3 * 8) + 4) } `Normal"
+     (((a 0) (b 0) (c 0) (o (0 3)) (instructions (0 3 5 4 3 0)) (head 6)) 3,0))
+    ("execute { state with a = ((((3 * 8) * 8) + (4 * 8)) + 5) } `Normal"
+     (((a 0) (b 0) (c 0) (o (0 3 4)) (instructions (0 3 5 4 3 0)) (head 6))
+      4,3,0))
     |}]
 ;;
