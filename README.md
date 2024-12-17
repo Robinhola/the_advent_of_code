@@ -26,7 +26,7 @@ python3 ./bootstrap.py
 ## Use goto.sh to navigate quickly between days
 
 ```sh
-./goto.sh
+. ./goto.sh
 ```
 
 ## And you may use today-ocaml or today-python as shortcuts
