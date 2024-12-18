@@ -8,6 +8,7 @@ type t =
 [@@deriving sexp]
 
 val parse : string list -> t
+val make : Coord.t -> char -> t
 val next : t -> Coord.t -> Dir.t -> Coord.t option
 val all_indices : t -> Coord.t list
 val get : t -> Coord.t -> char

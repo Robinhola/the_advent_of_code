@@ -13,6 +13,11 @@ let parse l =
   { words; dims }
 ;;
 
+let make (dims : Coord.t) v =
+  let l = List.range 0 dims.y |> List.map ~f:(fun _ -> String.make dims.x v) in
+  parse l
+;;
+
 let next t coord direction =
   let mx, my = Coord.to_tuple t.dims in
   let x, y = Coord.to_tuple coord in
