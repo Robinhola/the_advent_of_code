@@ -7,12 +7,18 @@ type t =
   }
 [@@deriving sexp]
 
+(* Creators *)
 val parse : string list -> t
 val make : Coord.t -> char -> t
-val next : t -> Coord.t -> Dir.t -> Coord.t option
+
+(* With Coords as input/ouput *)
 val all_indices : t -> Coord.t list
+val next : t -> Coord.t -> Dir.t -> Coord.t option
+
+(* Get value in or out of the matrix *)
 val get : t -> Coord.t -> char
 val set : t -> Coord.t -> char -> unit
-val within_bounds : t -> Coord.t -> bool
-val to_strings : t -> string List.t
+
+(* Quality Of Life utils *)
 val print : t -> unit
+val within_bounds : t -> Coord.t -> bool
