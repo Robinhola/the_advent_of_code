@@ -128,14 +128,8 @@ let part2 (lines : string list) =
   let first =
     List.find_exn rest ~f:(fun c ->
       fall' t c;
-      if Set.mem !last_path c
-      then (
-        match find_path t with
-        | None -> true
-        | Some p ->
-          last_path := p;
-          false)
-      else false)
+      Set.mem !last_path c
+      && find_path t |> Option.map ~f:(fun p -> last_path := p) |> Option.is_none)
   in
   print_s [%message (first : Coord.t)];
   0
