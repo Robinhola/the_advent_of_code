@@ -1,12 +1,14 @@
 .PHONY: all deps
 
+folders = . ./2016 ./2023 ./2024
+
 default: all
 
 deps:
 	cd ./advent; make -s;
 
 all: deps
-	@for i in $$(find . ./2024 -type d -depth 1 | grep -e ocaml | sort); \
+	@for i in $$(find $(folders) -type d -depth 1 | grep -e ocaml | sort); \
 		do ( \
 		cd $$i; make -s; \
 		cd - > /dev/null; \
@@ -15,7 +17,7 @@ all: deps
 		wait
 
 clean:
-	@for i in $$(find . ./2024 -type d -depth 1 | grep -e ocaml | sort); \
+	@for i in $$(find $(folders) -type d -depth 1 | grep -e ocaml | sort); \
 		do ( \
 		cd $$i/advent; dune clean; \
 		cd - > /dev/null; \
@@ -24,7 +26,7 @@ clean:
 		wait
 
 run:
-	@for i in $$(find . ./2024 -type d -depth 1 | grep -e ocaml | grep -v default | sort); \
+	@for i in $$(find $(folders) -type d -depth 1 | grep -e ocaml | grep -v default | sort); \
 		do ( \
 		echo "Running $$i"; \
 		cd $$i; make with_input -s; \
@@ -34,4 +36,4 @@ run:
 		wait
 
 copy-main:
-	for i in $$(find . ./2024 -name main.ml | grep -v _build | grep -v default); do cp ocaml_default_project/advent/bin/main.ml $$i; done
+	for i in $$(find $(folders) -name main.ml | grep -v _build | grep -v default); do cp ocaml_default_project/advent/bin/main.ml $$i; done
