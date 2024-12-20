@@ -36,6 +36,9 @@ def main():
     print("Copy bootstrap project")
     copy_default_project(f"{coding_language}_default_project", folder_name)
 
+    print("Done! Find the project in: ")
+    print(folder_name)
+
 
 if __name__ == "__main__":
     main()
