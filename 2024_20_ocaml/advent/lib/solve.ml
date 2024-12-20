@@ -61,7 +61,9 @@ let all_from m (c : Coord.t) d =
     then None
     else (
       let c = Coord.{ x = c.x + x; y = c.y + y } in
-      Option.some_if (Matrix.within_bounds m c) c))
+      Option.some_if
+        (Matrix.within_bounds m c && not (Matrix.get m c |> Char.equal '#'))
+        c))
 ;;
 
 let%expect_test _ =
@@ -70,14 +72,10 @@ let%expect_test _ =
   print_s [%message (all_from t.m (Coord.of_tuple (5, 5)) 2 : Coord.t list)];
   [%expect
     {|
-    ("all_from t.m (Coord.of_tuple (0, 0)) 2"
-     (((x 0) (y 0)) ((x 0) (y 1)) ((x 0) (y 2)) ((x 1) (y 0)) ((x 1) (y 1))
-      ((x 2) (y 0))))
+    ("all_from t.m (Coord.of_tuple (0, 0)) 2" (((x 1) (y 1))))
     ("all_from t.m (Coord.of_tuple (5, 5)) 2"
-     (((x 3) (y 5)) ((x 3) (y 6)) ((x 3) (y 7)) ((x 4) (y 4)) ((x 4) (y 5))
-      ((x 4) (y 6)) ((x 4) (y 7)) ((x 5) (y 3)) ((x 5) (y 4)) ((x 5) (y 5))
-      ((x 5) (y 6)) ((x 5) (y 7)) ((x 6) (y 3)) ((x 6) (y 4)) ((x 6) (y 5))
-      ((x 6) (y 6)) ((x 7) (y 3)) ((x 7) (y 4)) ((x 7) (y 5))))
+     (((x 3) (y 7)) ((x 4) (y 7)) ((x 5) (y 3)) ((x 5) (y 7)) ((x 7) (y 3))
+      ((x 7) (y 4)) ((x 7) (y 5))))
     |}]
 ;;
 
@@ -108,11 +106,11 @@ let%expect_test _ =
   let t = parse sample_1 in
   print_s [%message (Hashtbl.length t.path : int)];
   print_s [%message (partx sample_1 2 20 : int)];
-  print_s [%message (partx sample_1 20 50 : int)];
+  print_s [%message (partx sample_1 20 74 : int)];
   [%expect
     {|
     ("Hashtbl.length t.path" 85)
     ("partx sample_1 2 20" 5)
-    ("partx sample_1 20 50" 0)
+    ("partx sample_1 20 74" 7)
     |}]
 ;;
