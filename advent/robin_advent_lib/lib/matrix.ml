@@ -7,6 +7,15 @@ type t =
   }
 [@@deriving sexp]
 
+let within_bounds t (c : Coord.t) =
+  let m = t.dims in
+  not (c.x < 0 || c.y < 0 || c.x >= m.x || c.y >= m.y)
+;;
+
+let print t =
+  Array.to_list t.words |> List.map ~f:String.of_array |> List.iter ~f:print_endline
+;;
+
 let parse l =
   let words = List.map l ~f:String.to_array |> List.to_array in
   let dims = { Coord.x = Array.length words.(0); y = Array.length words } in
@@ -37,6 +46,47 @@ let next t coord direction =
   | nx, ny when nx < 0 || ny < 0 -> None
   | nx, ny when nx >= mx || ny >= my -> None
   | nx, ny -> Some { Coord.x = nx; y = ny }
+;;
+
+let all_within t c d =
+  let till_d = List.range ~start:`inclusive ~stop:`inclusive (-d) d in
+  List.cartesian_product till_d till_d
+  |> List.filter_map ~f:(fun (x, y) ->
+    if abs (x + y) > d
+    then None
+    else (
+      let c = Coord.{ x = c.x + x; y = c.y + y } in
+      Option.some_if (within_bounds t c) c))
+;;
+
+let%expect_test _ =
+  let t =
+    "....#.....\n\
+     .........#\n\
+     ..........\n\
+     ..#.......\n\
+     .......#..\n\
+     ..........\n\
+     .#..^.....\n\
+     ........#.\n\
+     #.........\n\
+     ......#..."
+    |> String.split_lines
+    |> parse
+  in
+  print_s [%message (all_within t (Coord.of_tuple (0, 0)) 2 : Coord.t list)];
+  print_s [%message (all_within t (Coord.of_tuple (5, 5)) 2 : Coord.t list)];
+  [%expect
+    {|
+    ("all_within t (Coord.of_tuple (0, 0)) 2"
+     (((x 0) (y 0)) ((x 0) (y 1)) ((x 0) (y 2)) ((x 1) (y 0)) ((x 1) (y 1))
+      ((x 2) (y 0))))
+    ("all_within t (Coord.of_tuple (5, 5)) 2"
+     (((x 3) (y 5)) ((x 3) (y 6)) ((x 3) (y 7)) ((x 4) (y 4)) ((x 4) (y 5))
+      ((x 4) (y 6)) ((x 4) (y 7)) ((x 5) (y 3)) ((x 5) (y 4)) ((x 5) (y 5))
+      ((x 5) (y 6)) ((x 5) (y 7)) ((x 6) (y 3)) ((x 6) (y 4)) ((x 6) (y 5))
+      ((x 6) (y 6)) ((x 7) (y 3)) ((x 7) (y 4)) ((x 7) (y 5))))
+    |}]
 ;;
 
 let all_indices t =
@@ -87,11 +137,3 @@ let%expect_test _ =
     ("get t { x = 4; y = 6 }" R)
     |}]
 ;;
-
-let within_bounds t (c : Coord.t) =
-  let m = t.dims in
-  not (c.x < 0 || c.y < 0 || c.x >= m.x || c.y >= m.y)
-;;
-
-let to_strings t = Array.to_list t.words |> List.map ~f:String.of_array
-let print t = to_strings t |> List.iter ~f:print_endline

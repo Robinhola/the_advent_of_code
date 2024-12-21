@@ -14,6 +14,7 @@ val make : Coord.t -> char -> t
 (* With Coords as input/ouput *)
 val all_indices : t -> Coord.t list
 val next : t -> Coord.t -> Dir.t -> Coord.t option
+val all_within : t -> Coord.t -> int -> Coord.t list
 
 (* Get value in or out of the matrix *)
 val get : t -> Coord.t -> char

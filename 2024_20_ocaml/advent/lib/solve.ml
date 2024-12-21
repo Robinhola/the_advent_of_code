@@ -53,50 +53,20 @@ let parse lines =
   { m; path }
 ;;
 
-let all_from m (c : Coord.t) d =
-  let till_d = List.range ~start:`inclusive ~stop:`inclusive (-d) d in
-  List.cartesian_product till_d till_d
-  |> List.filter_map ~f:(fun (x, y) ->
-    if abs (x + y) > d
-    then None
-    else (
-      let c = Coord.{ x = c.x + x; y = c.y + y } in
-      Option.some_if
-        (Matrix.within_bounds m c && not (Matrix.get m c |> Char.equal '#'))
-        c))
-;;
-
-let%expect_test _ =
-  let t = parse sample_1 in
-  print_s [%message (all_from t.m (Coord.of_tuple (0, 0)) 2 : Coord.t list)];
-  print_s [%message (all_from t.m (Coord.of_tuple (5, 5)) 2 : Coord.t list)];
-  [%expect
-    {|
-    ("all_from t.m (Coord.of_tuple (0, 0)) 2" (((x 1) (y 1))))
-    ("all_from t.m (Coord.of_tuple (5, 5)) 2"
-     (((x 3) (y 7)) ((x 4) (y 7)) ((x 5) (y 3)) ((x 5) (y 7)) ((x 7) (y 3))
-      ((x 7) (y 4)) ((x 7) (y 5))))
-    |}]
-;;
-
 let partx lines max_d save_at_least =
   let t = parse lines in
-  let valid =
-    t.path
-    |> Hashtbl.to_alist
-    |> List.concat_map ~f:(fun (start, d) ->
-      all_from t.m start max_d
-      |> List.filter ~f:(fun end_ ->
-        match Hashtbl.find t.path end_ with
-        | None -> false
-        | Some d' ->
-          let distance_from_one_another =
-            abs (end_.x - start.x) + abs (end_.y - start.y)
-          in
-          distance_from_one_another <= max_d
-          && d' - d - distance_from_one_another >= save_at_least))
-  in
-  List.length valid
+  t.path
+  |> Hashtbl.to_alist
+  |> List.concat_map ~f:(fun (start, d) ->
+    List.filter (Matrix.all_within t.m start max_d) ~f:(fun end_ ->
+      (not (Matrix.get t.m end_ |> Char.equal '#'))
+      &&
+      match Hashtbl.find t.path end_ with
+      | None -> false
+      | Some d' ->
+        let distance = abs (end_.x - start.x) + abs (end_.y - start.y) in
+        distance <= max_d && d' - d - distance >= save_at_least))
+  |> List.length
 ;;
 
 let part1 (lines : string list) = partx lines 2 100
