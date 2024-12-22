@@ -77,6 +77,12 @@ let all_shortest_paths m from to_ =
   find ~m ~seen ~bests:(Int.Table.create ()) to_ queue
 ;;
 
+let all_shortest_paths' m s e =
+  match all_shortest_paths m s e |> Hashtbl.data with
+  | [ possibles ] -> possibles
+  | _ -> assert false
+;;
+
 type shortest_paths = char list list Int.Table.t [@@deriving sexp]
 
 let rec length m = function
@@ -173,6 +179,22 @@ let combine chemin =
   combine ('A' :: chemin)
 ;;
 
+let combine' chemin =
+  let rec combine = function
+    | _ :: [] | [] -> []
+    | [ s; e ] ->
+      let key = s, e in
+      let best = Hashtbl.find_exn best_directional_paths key in
+      List.concat [ best; [ 'A' ] ]
+    | s :: e :: rest ->
+      let key = s, e in
+      let best = Hashtbl.find_exn best_directional_paths key in
+      let value = combine (e :: rest) in
+      List.concat [ best; [ 'A' ]; value ]
+  in
+  combine chemin
+;;
+
 let pairs s =
   let rec pairs current = function
     | [ _ ] -> List.rev current
@@ -180,6 +202,15 @@ let pairs s =
     | [] -> assert false
   in
   pairs [] (String.to_list s |> List.map ~f:Char.to_string)
+;;
+
+let pairs' s =
+  let rec pairs current = function
+    | [ _ ] -> List.rev current
+    | a :: b :: rest -> pairs ([ a; b ] :: current) (b :: rest)
+    | [] -> assert false
+  in
+  pairs [] s
 ;;
 
 let algo n code =
@@ -218,40 +249,41 @@ let part1' (lines : string list) =
       l * n)
 ;;
 
-let partx ~cache ~total_iterations ~batch_size (word : char list) =
-  (*let () =*)
-  (*  match List.hd_exn word |> Char.equal 'A', List.last_exn word |> Char.equal 'A' with*)
-  (*  | true, true -> ()*)
-  (*  | false, _ | _, false -> raise_s [%message (word : char list)]*)
-  (*in*)
-  (*print_s [%message (word : char list)];*)
+let to_s = String.of_list
+
+let partx ?(print = false) ~cache ~total_iterations ~batch_size (word : char list) =
   assert (total_iterations % batch_size = 0);
   let goal = total_iterations / batch_size in
-  let rec partx' ~goal i x =
+  let rec partx ~goal i x =
     let iterations_so_far = i * batch_size in
     let key = x, iterations_so_far in
     match Hashtbl.find cache key with
     | Some value -> value
     | None ->
+      let () =
+        if print
+        then (
+          let word = to_s word in
+          let x = to_s x in
+          print_s [%message (word : string) (x : string) (iterations_so_far : int)])
+      in
       let value =
         match i = goal with
-        | true -> Fn.apply_n_times ~n:batch_size combine x |> List.length
+        | true ->
+          let l = Fn.apply_n_times ~n:batch_size combine' x in
+          if print then print_s [%message (to_s l : string)];
+          List.length l
         | false ->
-          let next_batch =
-            Fn.apply_n_times ~n:batch_size combine x
-            |> String.of_list
-            |> fun s ->
-            String.prefix s (String.length s - 1)
-            |> String.split ~on:'A'
-            |> List.map ~f:(fun s -> s ^ "A")
-            |> List.map ~f:String.to_list
-          in
-          List.sum (module Int) ~f:(partx' ~goal (i + 1)) next_batch
+          let next_batch = Fn.apply_n_times ~n:batch_size combine' x in
+          (*let next_batch = pairs ("A" ^ next_batch) |> List.map ~f:String.to_list in*)
+          let next_batch = [ next_batch ] in
+          List.sum (module Int) ~f:(partx ~goal (i + 1)) next_batch
       in
       Hashtbl.add_exn cache ~key ~data:value;
       value
   in
-  List.sum (module Int) ~f:(partx' ~goal 1) [ word ]
+  let first_batch = pairs' ('A' :: word) in
+  List.sum (module Int) ~f:(partx ~goal 0) first_batch
 ;;
 
 let partx' ~cache ~total_iterations ~batch_size code =
@@ -260,8 +292,6 @@ let partx' ~cache ~total_iterations ~batch_size code =
     |> List.map ~f:(fun p -> p, Hashtbl.find_exn all_numeric_paths p)
     |> List.map ~f:(fun (_p, options) ->
       List.min_elt options ~compare:(fun a b ->
-        let a = List.concat [ a; [ 'A' ] ] in
-        let b = List.concat [ b; [ 'A' ] ] in
         let pna = partx ~cache ~total_iterations ~batch_size a in
         let pnb = partx ~cache ~total_iterations ~batch_size b in
         Int.compare pna pnb)
@@ -270,10 +300,12 @@ let partx' ~cache ~total_iterations ~batch_size code =
     |> String.concat ~sep:"A"
   in
   let bests = bests ^ "A" in
-  partx ~cache ~total_iterations ~batch_size (String.to_list bests)
+  print_s [%message (bests : string)];
+  partx ~print:false ~cache ~total_iterations ~batch_size (String.to_list bests)
 ;;
 
-let partx'' lines cache ~batch_size total =
+let partx'' lines ~batch_size total_iterations =
+  let cache = Cache'.create () in
   let value =
     List.sum
       (module Int)
@@ -281,18 +313,63 @@ let partx'' lines cache ~batch_size total =
       ~f:(fun code' ->
         let code = "A" ^ code' in
         let n = num_part code in
-        let l = partx' ~cache ~total_iterations:total ~batch_size code in
+        let l = partx' ~cache ~total_iterations ~batch_size code in
         l * n)
   in
-  (*print_s [%message (cache : int Cache'.t)];*)
   value
 ;;
 
-let cache = Cache'.create ()
-let part1 (lines : string list) = partx'' lines cache ~batch_size:1 2
-let cache = Cache'.create ()
-let part2 (lines : string list) = partx'' lines cache ~batch_size:1 25
-(*let part2 (_lines : string list) = 0*)
+let rec the_best_algo ~i (goal : char) =
+  match i with
+  | 0 -> 1
+  | i ->
+    let options =
+      all_shortest_paths' directional_keypad 'A' goal
+      |> List.map ~f:(fun p ->
+        let path =
+          (* all paths must end with a push *)
+          List.concat [ p; [ 'A' ] ]
+        in
+        (* Add caching here where key = path + i *)
+        path, List.sum (module Int) path ~f:(the_best_algo ~i:(i - 1)))
+    in
+    (* Get the shortest path *)
+    List.min_elt options ~compare:(fun (_, l) (_, r) -> Int.compare l r)
+    |> Option.map ~f:(fun (_, l) -> l)
+    |>
+    (* there is always a path between 2 buttons *)
+    Option.value_exn
+;;
+
+let%expect_test _ =
+  let test i =
+    "<A^A>^^AvvvA" |> String.to_list |> List.sum (module Int) ~f:(the_best_algo ~i)
+  in
+  print_s [%message (String.length "<A^A>^^AvvvA" : int)];
+  print_s [%message (test 0 : int)];
+  print_s [%message (String.length "v<<A>>^A<A>AvA<^AA>A<vAAA>^A" : int)];
+  print_s [%message (test 1 : int)];
+  print_s
+    [%message
+      (String.length
+         "<vA<AA>>^AvAA<^A>A<v<A>>^AvA^A<vA>^A<v<A>^A>AAvA^A<v<A>A>^AAAvA<^A>A"
+       : int)];
+  print_s [%message (test 2 : int)];
+  [%expect
+    {|
+    ("String.length \"<A^A>^^AvvvA\"" 12)
+    ("test 0" 12)
+    ("String.length \"v<<A>>^A<A>AvA<^AA>A<vAAA>^A\"" 28)
+    ("test 1" 25)
+    ( "String.length\
+     \n  \"<vA<AA>>^AvAA<^A>A<v<A>>^AvA^A<vA>^A<v<A>^A>AAvA^A<v<A>A>^AAAvA<^A>A\""
+     68)
+    ("test 2" 59)
+    |}]
+;;
+
+let part1 (lines : string list) = partx'' lines ~batch_size:1 2
+let part2 (lines : string list) = partx'' lines ~batch_size:1 2
 (* 184716
 
 high 267682029656984
@@ -313,7 +390,17 @@ let%expect_test _ =
     456A: v<<A>>^AA<vA<A>>^AAvAA<^A>A<vA>^A<A>A<vA>^A<A>Av<<A>A>^AAvA<^A>A
     379A: v<<A>>^AvA^A<vA<AA>>^AAvA<^A>AAvA^A<vA>^AA<A>Av<<A>A>^AAAvA<^A>A
     ("part1' sample_1" 126384)
-    ("part1 sample_1" 126384)
-    ("part2 sample_1" 175343041201758)
+    (bests <A^A^^>AvvvA)
+    (bests ^^^A<AvvvA>A)
+    (bests ^<<A^^A>>AvvvA)
+    (bests ^^<<A>A>AvvA)
+    (bests ^A^^<<A>>AvvvA)
+    ("part1 sample_1" 124174)
+    (bests <A^A^^>AvvvA)
+    (bests ^^^A<AvvvA>A)
+    (bests ^<<A^^A>>AvvvA)
+    (bests ^^<<A>A>AvvA)
+    (bests ^A^^<<A>>AvvvA)
+    ("part2 sample_1" 124174)
     |}]
 ;;
