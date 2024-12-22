@@ -233,6 +233,7 @@ let algo n code =
 let num_part s =
   match String.split s ~on:'A' with
   | [ ""; n; "" ] -> Int.of_string n
+  | [ n; "" ] -> Int.of_string n
   | _ -> assert false
 ;;
 
@@ -403,4 +404,69 @@ let%expect_test _ =
     (bests ^A^^<<A>>AvvvA)
     ("part2 sample_1" 124174)
     |}]
+;;
+
+(*@cache*)
+(*def path(start, end):*)
+(*    pad = N if (start in N and end in N) else R*)
+(*    diff = pad[end] - pad[start]*)
+(*    dx, dy = int(diff.real), int(diff.imag)*)
+(*    yy = ("^"*-dy) + ("v"*dy)*)
+(*    xx = ("<"*-dx) + (">"*dx)*)
+(*    bad = pad[" "] - pad[start]*)
+(*    prefer_yy_first = (dx>0 or bad==dx) and bad!=dy*1j*)
+(*    return (yy+xx if prefer_yy_first else xx+yy) + "A"*)
+
+let is_in m x = Matrix.find m x |> Option.is_some
+
+let path from to_ =
+  let keypad =
+    if is_in directional_keypad from && is_in directional_keypad to_
+    then directional_keypad
+    else numeric_keypad
+  in
+  let from = Matrix.find_exn keypad from in
+  let to_ = Matrix.find_exn keypad to_ in
+  let diff = Coord.offset ~from ~to_ in
+  let dx, dy = Coord.to_tuple diff in
+  let yy = if dy > 0 then String.make dy 'v' else String.make (-dy) '^' in
+  let xx = if dx > 0 then String.make dx '>' else String.make (-dx) '<' in
+  let bad = Coord.offset ~from ~to_:(Coord.of_tuple (0, 0)) in
+  let prefer_yy_first =
+    (dx > 0 || Coord.equal bad (Coord.of_tuple (dx, 0)))
+    && not (Coord.equal bad (Coord.of_tuple (0, dy)))
+  in
+  (if prefer_yy_first then yy ^ xx else xx ^ yy) ^ "A"
+;;
+
+(*@cache*)
+(*def length(code, depth, s=0):*)
+(*    if depth == 0: return len(code)*)
+(*    for i, c in enumerate(code):*)
+(*        s += length(path(code[i-1], c), depth-1)*)
+(*    return s*)
+
+let rec length code depth =
+  if depth = 0
+  then String.length code
+  else
+    pairs code
+    |> List.map ~f:(fun s ->
+      match String.to_list s with
+      | [ s; e ] -> s, e
+      | _ -> assert false)
+    |> List.sum
+         (module Int)
+         ~f:(fun (from, to_) ->
+           let path = path from to_ in
+           length path (depth - 1))
+;;
+
+let%expect_test _ =
+  let codes = sample_1 in
+  let total =
+    List.sum (module Int) codes ~f:(fun code -> num_part code * length code 4)
+  in
+  print_s [%message (total : int)];
+  [%expect {| (total 27899) |}]
 ;;
