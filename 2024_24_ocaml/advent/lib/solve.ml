@@ -96,11 +96,14 @@ let parse lines =
 ;;
 
 let get values transfos key =
+  let seen = String.Hash_set.create () in
   let rec get key =
     match Hashtbl.find values key with
     | Some value -> value
     | None ->
       let left, op, right = Map.find_exn transfos key in
+      Hash_set.add seen left;
+      Hash_set.add seen right;
       let left = get left in
       let right = get right in
       let value =
@@ -112,7 +115,7 @@ let get values transfos key =
       in
       value
   in
-  get key
+  get key, seen
 ;;
 
 let read values transfos c =
@@ -122,16 +125,38 @@ let read values transfos c =
   |> List.map ~f:(fun z -> get values transfos z)
 ;;
 
+let read' values transfos c =
+  read values transfos c |> List.map ~f:(fun (value, _) -> Int.to_string value)
+;;
+
+let print l = List.rev l |> String.concat |> String.pad_left ~len:46 |> print_endline
+
 let part1 (lines : string list) =
   let values, transfos = parse lines in
   let z_values = read values transfos 'z' in
-  List.foldi z_values ~init:0 ~f:(fun i total value ->
+  List.foldi z_values ~init:0 ~f:(fun i total (value, _) ->
     if value = 1 then total + Int.(2 ** i) else total)
 ;;
 
 let part2 (lines : string list) =
-  let _ = lines in
-  0
+  let values, transfos = parse lines in
+  let x_values = read' values transfos 'x' in
+  let y_values = read' values transfos 'y' in
+  print x_values;
+  print y_values;
+  let _, s1 = get values transfos "z40" in
+  let _, s2 = get values transfos "z39" in
+  let _, s3 = get values transfos "z21" in
+  let _, s4 = get values transfos "z10" in
+  let _, s5 = get values transfos "z08" in
+  let _, s6 = get values transfos "z07" in
+  let all_inter =
+    List.fold [ s1; s2; s3; s4; s5; s6 ] ~init:s1 ~f:(fun total seen ->
+      Hash_set.inter total seen)
+  in
+  let z_values = read' values transfos 'z' in
+  print z_values;
+  Hash_set.length all_inter
 ;;
 
 let%expect_test _ =

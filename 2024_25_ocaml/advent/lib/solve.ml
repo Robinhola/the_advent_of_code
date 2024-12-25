@@ -66,48 +66,10 @@ let do_fit a b =
   |> List.fold_until
        ~init:true
        ~f:(fun _ c ->
-         let a = Matrix.get a c in
-         let b = Matrix.get b c in
-         match a, b with
-         | '#', '#' ->
-           (*print_s [%message (a : char) (b : char) (c : Coord.t)];*)
-           Stop false
+         match Matrix.get a c, Matrix.get b c with
+         | '#', '#' -> Stop false
          | _ -> Continue true)
        ~finish:Fn.id
-;;
-
-let%expect_test _ =
-  let a =
-    {|.....
-.....
-#.#..
-###..
-###.#
-###.#
-#####|}
-    |> String.split_lines
-    |> Matrix.parse
-  in
-  let b =
-    {|#####
-##.##
-.#.##
-...##
-...#.
-...#.
-.....|}
-    |> String.split_lines
-    |> Matrix.parse
-  in
-  print_s [%message (do_fit a b : bool)];
-  print_s [%message (do_fit a a : bool)];
-  print_s [%message (do_fit b b : bool)];
-  [%expect
-    {|
-    ("do_fit a b" true)
-    ("do_fit a a" false)
-    ("do_fit b b" false)
-    |}]
 ;;
 
 let all_combinations l =
@@ -132,32 +94,10 @@ let part2 (lines : string list) =
 ;;
 
 let%expect_test _ =
-  print_s [%message (parse sample_1 : Matrix.t list)];
   print_s [%message (part1 sample_1 : int)];
   print_s [%message (part2 sample_1 : int)];
   [%expect
     {|
-    ("parse sample_1"
-     (((words
-        ((# # # # #) (# . # . #) (# . # . .) (# . . . .) (. . . . .) (. . . . .)
-         (. . . . .)))
-       (dims ((x 5) (y 7))))
-      ((words
-        ((# # # # #) (# # # . #) (# # # . #) (# # # . .) (# . # . .) (. . . . .)
-         (. . . . .)))
-       (dims ((x 5) (y 7))))
-      ((words
-        ((# # # # #) (# . # # #) (# . # . #) (# . . . #) (# . . . .) (# . . . .)
-         (. . . . .)))
-       (dims ((x 5) (y 7))))
-      ((words
-        ((. . . . .) (. . . # .) (. . . # .) (. . . # #) (. # . # #) (# # . # #)
-         (# # # # #)))
-       (dims ((x 5) (y 7))))
-      ((words
-        ((. . . . .) (. # . . .) (. # . # .) (. # # # #) (. # # # #) (. # # # #)
-         (# # # # #)))
-       (dims ((x 5) (y 7))))))
     ("part1 sample_1" 3)
     ("part2 sample_1" 0)
     |}]
