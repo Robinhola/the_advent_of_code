@@ -95,16 +95,12 @@ let parse lines =
   parse [] lines
 ;;
 
-let part1 (lines : string list) =
-  let values, transfos = parse lines in
+let get values transfos key =
   let rec get key =
     match Hashtbl.find values key with
-    | Some value ->
-      (*print_s [%message (key : string) (value : int)];*)
-      value
+    | Some value -> value
     | None ->
       let left, op, right = Map.find_exn transfos key in
-      (*print_s [%message (key : string) (left : string) (op : string) (right : string)];*)
       let left = get left in
       let right = get right in
       let value =
@@ -114,22 +110,23 @@ let part1 (lines : string list) =
         | "XOR" -> if left = right then 0 else 1
         | _ -> assert false
       in
-      (*print_s [%message (key : string) (value : int)];*)
       value
   in
-  (* Assume no z in values *)
-  let z_values =
-    Map.keys transfos
-    |> List.filter ~f:(fun key -> String.to_list key |> List.hd_exn |> Char.equal 'z')
-    |> List.sort ~compare:String.compare
-    |> List.map ~f:(fun z -> z, get z)
-  in
-  (*print_s [%message (z_values : (string * int) list)];*)
-  let z_values = z_values |> List.map ~f:(fun (_, v) -> Int.to_string v) in
-  let () = z_values |> List.rev |> String.concat |> print_endline in
+  get key
+;;
+
+let read values transfos c =
+  List.concat [ Hashtbl.keys values; Map.keys transfos ]
+  |> List.filter ~f:(fun key -> String.to_list key |> List.hd_exn |> Char.equal c)
+  |> List.sort ~compare:String.compare
+  |> List.map ~f:(fun z -> get values transfos z)
+;;
+
+let part1 (lines : string list) =
+  let values, transfos = parse lines in
+  let z_values = read values transfos 'z' in
   List.foldi z_values ~init:0 ~f:(fun i total value ->
-    (*print_s [%message (total : int) (i : int) (value : string)];*)
-    if String.equal value "1" then total + Int.(2 ** i) else total)
+    if value = 1 then total + Int.(2 ** i) else total)
 ;;
 
 let part2 (lines : string list) =
@@ -138,8 +135,6 @@ let part2 (lines : string list) =
 ;;
 
 let%expect_test _ =
-  (*print_s [%message (parse sample_1 : t)];*)
-  (*print_s [%message (parse sample_2 : t)];*)
   print_s [%message (part1 sample_1 : int)];
   print_s [%message (part1 sample_2 : int)];
   print_s [%message (part2 sample_1 : int)];
