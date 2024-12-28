@@ -66,6 +66,18 @@ tnw OR pbm -> gnj|}
   |> String.split_lines
 ;;
 
+let to_dot key (left, op, right) =
+  let color =
+    match op with
+    | "OR" -> "green"
+    | "XOR" -> "red"
+    | "AND" -> "blue"
+    | _ -> assert false
+  in
+  print_endline (String.concat [ left; " -> "; key; "[color="; color; "];" ]);
+  print_endline (String.concat [ right; " -> "; key; "[color="; color; "];" ])
+;;
+
 type t = int String.Table.t * (string * string * string) String.Map.t [@@deriving sexp]
 
 let parse lines =
@@ -125,11 +137,11 @@ let read values transfos c =
   |> List.map ~f:(fun z -> get values transfos z)
 ;;
 
-let read' values transfos c =
-  read values transfos c |> List.map ~f:(fun (value, _) -> Int.to_string value)
-;;
+(*let read' values transfos c =*)
+(*  read values transfos c |> List.map ~f:(fun (value, _) -> Int.to_string value)*)
+(*;;*)
 
-let print l = List.rev l |> String.concat |> String.pad_left ~len:46 |> print_endline
+(*let print l = List.rev l |> String.concat |> String.pad_left ~len:46 |> print_endline*)
 
 let part1 (lines : string list) =
   let values, transfos = parse lines in
@@ -138,25 +150,55 @@ let part1 (lines : string list) =
     if value = 1 then total + Int.(2 ** i) else total)
 ;;
 
+let rec check_rules ~seen transfos node expecting =
+  if Hash_set.mem seen node
+  then true
+  else (
+      Hash_set.add seen node;
+    let left, op, right = Map.find_exn transfos node in
+
+    let () =
+        match op with 
+    | "XOR" -> 
+
+
+            (* soit gauche est xor et right est or *)
+            (* soit gauche est or et right est xor *)
+            (* soit gauche est or et right est pas bon *)
+            (* soit ri est or et right est pas bon *)
+
+
+
+
+
+
+    | "OR" -> "green"
+    | "AND" -> "blue"
+    | _ -> assert false
+
+
+        in
+
+
+
+
+
+    (String.equal node expecting) 
+
+
+
+
+
+
+
+
+    )
+;;
+
 let part2 (lines : string list) =
-  let values, transfos = parse lines in
-  let x_values = read' values transfos 'x' in
-  let y_values = read' values transfos 'y' in
-  print x_values;
-  print y_values;
-  let _, s1 = get values transfos "z40" in
-  let _, s2 = get values transfos "z39" in
-  let _, s3 = get values transfos "z21" in
-  let _, s4 = get values transfos "z10" in
-  let _, s5 = get values transfos "z08" in
-  let _, s6 = get values transfos "z07" in
-  let all_inter =
-    List.fold [ s1; s2; s3; s4; s5; s6 ] ~init:s1 ~f:(fun total seen ->
-      Hash_set.inter total seen)
-  in
-  let z_values = read' values transfos 'z' in
-  print z_values;
-  Hash_set.length all_inter
+  let _, transfos = parse lines in
+  Map.iteri transfos ~f:(fun ~key ~data -> to_dot key data);
+  0
 ;;
 
 let%expect_test _ =
@@ -165,10 +207,18 @@ let%expect_test _ =
   print_s [%message (part2 sample_1 : int)];
   [%expect
     {|
-    100
     ("part1 sample_1" 4)
-    0011111101000
     ("part1 sample_2" 2024)
+    x00 -> z00[color=blue];
+    y00 -> z00[color=blue];
+    x01 -> z01[color=red];
+    y01 -> z01[color=red];
+    x02 -> z02[color=green];
+    y02 -> z02[color=green];
     ("part2 sample_1" 0)
     |}]
 ;;
+
+(*
+   psq pjt
+*)
