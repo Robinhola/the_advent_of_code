@@ -60,9 +60,50 @@ let part1 (lines : string list) =
     List.sum (module Int) ~f:(fun x -> x) res + acc)
 ;;
 
+let rec repeat s n = if n <= 0 then "" else s ^ repeat s (n - 1)
+
+let brute_test s =
+  let n = String.length s in
+  (*if n % 2 = 1*)
+  (*then*)
+  (*  List.range ~start:`inclusive ~stop:`inclusive 1 n*)
+  (*  |> List.find ~f:(fun x ->*)
+  (*    let how_many_times = n / x in*)
+  (*    let prefix = String.prefix s x in*)
+  (*    let repeated = repeat prefix how_many_times in*)
+  (*    print_s [%message (s : string) (prefix : string) (repeated : string)];*)
+  (*    String.equal repeated s)*)
+  (*  |> Option.is_some*)
+  (*else*)
+  List.range ~start:`inclusive ~stop:`inclusive 1 (n / 2)
+  |> List.find ~f:(fun x ->
+    let how_many_times = n / x in
+    let prefix = String.prefix s x in
+    let repeated = repeat prefix how_many_times in
+    (*print_s [%message (s : string) (prefix : string) (repeated : string)];*)
+    String.equal repeated s)
+  |> Option.is_some
+;;
+
+let rec brute_test' x b res =
+  if x > b
+  then res
+  else (
+    let res =
+      match brute_test (Int.to_string x) with
+      | true -> x :: res
+      | false -> res
+    in
+    brute_test' (x + 1) b res)
+;;
+
 let part2 (lines : string list) =
-  let _ = lines in
-  0
+  let ranges = List.hd_exn lines |> ranges in
+  let ranges = List.map ranges ~f:range in
+  List.fold ~init:0 ranges ~f:(fun acc (a, b) ->
+    let res = brute_test' a b [] in
+    print_s [%message ((a, b) : int * int) (res : int list)];
+    List.sum (module Int) ~f:(fun x -> x) res + acc)
 ;;
 
 let%expect_test _ =
@@ -82,6 +123,17 @@ let%expect_test _ =
     (("(a, b)" (824824821 824824827)) (res ()))
     (("(a, b)" (2121212118 2121212124)) (res ()))
     ("part1 sample_1" 1227775554)
-    ("part2 sample_1" 0)
+    (("(a, b)" (11 22)) (res (22 11)))
+    (("(a, b)" (95 115)) (res (111 99)))
+    (("(a, b)" (998 1012)) (res (1010 999)))
+    (("(a, b)" (1188511880 1188511890)) (res (1188511885)))
+    (("(a, b)" (222220 222224)) (res (222222)))
+    (("(a, b)" (1698522 1698528)) (res ()))
+    (("(a, b)" (446443 446449)) (res (446446)))
+    (("(a, b)" (38593856 38593862)) (res (38593859)))
+    (("(a, b)" (565653 565659)) (res (565656)))
+    (("(a, b)" (824824821 824824827)) (res (824824824)))
+    (("(a, b)" (2121212118 2121212124)) (res (2121212121)))
+    ("part2 sample_1" 4174379265)
     |}]
 ;;
