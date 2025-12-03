@@ -2,9 +2,11 @@ open! Base
 open! Core
 
 [@@@warning "-32"]
+[@@@warning "-27"]
 
 let should_print_debug = ref false
 let debug sexp = if !should_print_debug then print_s sexp
+let sum = List.sum (module Int)
 let sample_1 = {||} |> String.split_lines
 
 let part1 (lines : string list) =
@@ -12,10 +14,7 @@ let part1 (lines : string list) =
   0
 ;;
 
-let part2 (lines : string list) =
-  let _ = lines in
-  0
-;;
+let part2 (lines : string list) = 0
 
 let%expect_test _ =
   should_print_debug := true;
