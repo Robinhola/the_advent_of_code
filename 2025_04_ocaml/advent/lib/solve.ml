@@ -7,7 +7,7 @@ open! Robin_advent_lib
 [@@@warning "-26"]
 
 let should_print_debug = ref false
-let debug sexp = if !should_print_debug then print_s sexp
+let debug t = if !should_print_debug then Matrix.print t
 let sum = List.sum (module Int)
 
 let sample_1 =
@@ -58,6 +58,7 @@ let remove_and_count t =
 let part1 (lines : string list) =
   let t = parse lines in
   let t = next_round t in
+  let () = debug t in
   remove_and_count t
 ;;
 
@@ -70,31 +71,42 @@ let rec remove_all t total =
 
 let part2 (lines : string list) =
   let t = parse lines in
-  remove_all t 0
+  let total_removed = remove_all t 0 in
+  let () = debug t in
+  total_removed
 ;;
 
 let%expect_test _ =
   should_print_debug := true;
   let t = parse sample_1 in
-  Matrix.print t;
-  print_s [%message (Matrix.all_within t (Coord.of_tuple (0, 0)) 1 : Coord.t list)];
+  print_s [%message (all_around t (Coord.of_tuple (0, 0)) : Coord.t list)];
   print_s [%message (part1 sample_1 : int)];
   print_s [%message (part2 sample_1 : int)];
   [%expect
     {|
-    ..@@.@@@@.
-    @@@.@.@.@@
-    @@@@@.@.@@
+    ("all_around t (Coord.of_tuple (0, 0))"
+     (((x 0) (y 1)) ((x 1) (y 0)) ((x 1) (y 1))))
+    ..xx.xx@x.
+    x@@.@.@.@@
+    @@@@@.x.@@
     @.@@@@..@.
-    @@.@@@@.@@
+    x@.@@@@.@x
     .@@@@@@@.@
     .@.@.@.@@@
-    @.@@@.@@@@
+    x.@@@.@@@@
     .@@@@@@@@.
-    @.@.@@@.@.
-    ("Matrix.all_within t (Coord.of_tuple (0, 0)) 1"
-     (((x 0) (y 0)) ((x 0) (y 1)) ((x 1) (y 0))))
+    x.x.@@@.x.
     ("part1 sample_1" 13)
+    ..........
+    ..........
+    ..........
+    ....@@....
+    ...@@@@...
+    ...@@@@@..
+    ...@.@.@@.
+    ...@@.@@@.
+    ...@@@@@..
+    ....@@@...
     ("part2 sample_1" 43)
     |}]
 ;;
