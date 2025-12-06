@@ -161,3 +161,16 @@ let%expect_test _ =
      ((words ((1 1) (2 2) (3 3) (4 4) (5 5) (6 6))) (dims ((x 2) (y 6)))))
     |}]
 ;;
+
+let to_list t = Array.to_list t.words |> List.map ~f:Array.to_list
+
+let%expect_test _ =
+  let t = "123456\n123456" |> String.split_lines |> parse in
+  print_s [%message (t : t)];
+  print_s [%message (to_list t : char list list)];
+  [%expect
+    {|
+    (t ((words ((1 2 3 4 5 6) (1 2 3 4 5 6))) (dims ((x 6) (y 2)))))
+    ("to_list t" ((1 2 3 4 5 6) (1 2 3 4 5 6)))
+    |}]
+;;

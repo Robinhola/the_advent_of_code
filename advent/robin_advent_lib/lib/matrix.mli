@@ -22,6 +22,7 @@ val all_within : t -> Coord.t -> int -> Coord.t list
 val get : t -> Coord.t -> char
 val set : t -> Coord.t -> char -> unit
 val iteri : t -> f:(Coord.t -> char -> unit) -> unit
+val to_list : t -> char list list
 
 (* Quality Of Life utils *)
 val print : t -> unit
