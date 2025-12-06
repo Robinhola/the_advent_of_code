@@ -137,3 +137,27 @@ let%expect_test _ =
     ("get t { x = 4; y = 6 }" R)
     |}]
 ;;
+
+let iteri t ~f = all_indices t |> List.iter ~f:(fun c -> f c (get t c))
+
+let transpose t =
+  let t' = make (Coord.swap t.dims) 'x' in
+  iteri t ~f:(fun c x ->
+    let c' = Coord.swap c in
+    set t' c' x);
+  t'
+;;
+
+let dims t = t.dims
+
+let%expect_test _ =
+  let t = "123456\n123456" |> String.split_lines |> parse in
+  print_s [%message (t : t)];
+  print_s [%message (transpose t : t)];
+  [%expect
+    {|
+    (t ((words ((1 2 3 4 5 6) (1 2 3 4 5 6))) (dims ((x 6) (y 2)))))
+    ("transpose t"
+     ((words ((1 1) (2 2) (3 3) (4 4) (5 5) (6 6))) (dims ((x 2) (y 6)))))
+    |}]
+;;

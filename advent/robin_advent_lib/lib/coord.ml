@@ -29,3 +29,5 @@ let apply from ~offset =
   let y = from.y + offset.y in
   { x; y }
 ;;
+
+let swap t = { x = t.y; y = t.x }
