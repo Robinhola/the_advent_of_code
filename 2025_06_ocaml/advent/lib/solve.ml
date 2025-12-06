@@ -19,6 +19,14 @@ let sample_1 =
   |> String.split_lines
 ;;
 
+let map_signs_to_cols signs cols =
+  List.mapi signs ~f:(fun i sign ->
+    match sign with
+    | "*" -> Array.get cols i |> mul
+    | "+" -> Array.get cols i |> sum
+    | _ -> raise_s [%message "impossible"])
+;;
+
 let part1 (lines : string list) =
   let l =
     List.map lines ~f:(fun s ->
@@ -26,23 +34,17 @@ let part1 (lines : string list) =
   in
   debug [%message (l : string list list)];
   let nums = List.take l (List.length l - 1) |> List.map ~f:(List.map ~f:Int.of_string) in
-  let cols = List.hd_exn nums |> Array.of_list_map ~f:(fun n -> Array.of_list [ n ]) in
+  let cols = List.hd_exn nums |> Array.of_list_map ~f:(fun n -> [ n ]) in
   let signs = List.rev l |> List.hd_exn in
-  debug [%message (cols : int array array) (signs : string list)];
+  debug [%message (cols : int list array) (signs : string list)];
   List.drop nums 1
   |> List.iter ~f:(fun l ->
     List.iteri l ~f:(fun i x ->
       let col = Array.get cols i in
-      let new_col = Array.append col (Array.of_list [ x ]) in
+      let new_col = x :: col in
       Array.set cols i new_col));
-  debug [%message (cols : int array array) (signs : string list)];
-  let vals =
-    List.mapi signs ~f:(fun i sign ->
-      match sign with
-      | "*" -> Array.get cols i |> Array.to_list |> mul
-      | "+" -> Array.get cols i |> Array.to_list |> sum
-      | _ -> raise_s [%message "impossible"])
-  in
+  debug [%message (cols : int list array) (signs : string list)];
+  let vals = map_signs_to_cols signs cols in
   sum vals
 ;;
 
@@ -91,13 +93,7 @@ let part2 (lines : string list) =
   in
   let cols = split_on_zero nums [] [] |> Array.of_list in
   debug [%message (cols : int list array) (signs : string list)];
-  let vals =
-    List.mapi signs ~f:(fun i sign ->
-      match sign with
-      | "*" -> Array.get cols i |> mul
-      | "+" -> Array.get cols i |> sum
-      | _ -> raise_s [%message "impossible"])
-  in
+  let vals = map_signs_to_cols signs cols in
   sum vals
 ;;
 
