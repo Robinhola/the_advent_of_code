@@ -64,21 +64,47 @@ let count_splits t =
   |> sum
 ;;
 
+let find_start t =
+  Matrix.all_indices t
+  |> List.find ~f:(fun c ->
+    let x = Matrix.get t c in
+    Char.equal x 'S')
+  |> Option.value_exn
+;;
+
 let part1 (lines : string list) =
   let t = Matrix.parse lines in
-  let s =
-    Matrix.all_indices t
-    |> List.find ~f:(fun c ->
-      let x = Matrix.get t c in
-      Char.equal x 'S')
-    |> Option.value_exn
-  in
+  let s = find_start t in
   let t = beam_down t 0 [ s ] in
   if !should_print_debug then Matrix.print t;
   count_splits t
 ;;
 
-let part2 (lines : string list) = 0
+let rec beam_down' t ~seen c =
+  match Hashtbl.find seen c with
+  | Some value -> value
+  | None ->
+    let result =
+      let down = Matrix.next t c Dir.Down in
+      match Option.map down ~f:(Matrix.get t) with
+      | Some '.' -> beam_down' t ~seen (Option.value_exn down)
+      | Some '^' ->
+        [ Dir.Left; Dir.Right ]
+        |> List.filter_map ~f:(Matrix.next t (Option.value_exn down))
+        |> sum' ~f:(beam_down' ~seen t)
+      | None -> 1
+      | _ -> impossible ()
+    in
+    Hashtbl.add_exn seen ~key:c ~data:result;
+    result
+;;
+
+let part2 (lines : string list) =
+  let t = Matrix.parse lines in
+  let s = find_start t in
+  let seen = Coord.Hashtbl.of_alist_exn [] in
+  beam_down' t ~seen s
+;;
 
 let%expect_test _ =
   should_print_debug := true;
@@ -103,6 +129,6 @@ let%expect_test _ =
     .^.^|^.^|^||.^.
     |.|.|.|.|.|||.|
     ("part1 sample_1" 21)
-    ("part2 sample_1" 0)
+    ("part2 sample_1" 40)
     |}]
 ;;
