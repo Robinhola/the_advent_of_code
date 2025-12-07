@@ -10,6 +10,7 @@ let should_print_debug = ref false
 let debug sexp = if !should_print_debug then print_s sexp
 let sum = List.sum (module Int) ~f:Fn.id
 let mul = List.fold ~init:1 ~f:(fun a b -> a * b)
+let impossible () = raise_s [%message "impossible"]
 
 let sample_1 =
   {|123 328  51 64 
@@ -24,7 +25,7 @@ let map_signs_to_cols signs cols =
     match sign with
     | "*" -> Array.get cols i |> mul
     | "+" -> Array.get cols i |> sum
-    | _ -> raise_s [%message "impossible"])
+    | _ -> impossible ())
 ;;
 
 let part1 (lines : string list) =
@@ -48,15 +49,13 @@ let part1 (lines : string list) =
   sum vals
 ;;
 
-let rec split_blocks blocks current results =
-  match blocks with
+let rec split_blocks current results = function
   | [] -> current :: results
-  | "" :: rest -> split_blocks rest [] (current :: results)
-  | line :: rest -> split_blocks rest (line :: current) results
+  | "" :: rest -> split_blocks [] (current :: results) rest
+  | line :: rest -> split_blocks (line :: current) results rest
 ;;
 
-let rec process_block vals block =
-  match block with
+let rec process_block vals = function
   | [ last_value ] ->
     let value = String.drop_suffix last_value 1 |> Int.of_string in
     let sign = String.drop_prefix last_value (String.length last_value - 1) in
@@ -64,23 +63,21 @@ let rec process_block vals block =
     (match sign with
      | "+" -> sum vals
      | "*" -> mul vals
-     | _ -> raise_s [%message "impossible"])
+     | _ -> impossible ())
   | value :: rest ->
     let vals = Int.of_string value :: vals in
     process_block vals rest
-  | _ -> raise_s [%message "impossible"]
+  | _ -> impossible ()
 ;;
 
 let part2 (lines : string list) =
-  let t = Matrix.parse lines in
-  let t = Matrix.transpose t in
-  let sanitized =
-    Matrix.to_list t
-    |> List.map ~f:String.of_list
-    |> List.map ~f:(String.substr_replace_all ~pattern:" " ~with_:"")
-  in
-  let blocks = split_blocks sanitized [] [] in
-  sum (List.map blocks ~f:(process_block []))
+  List.map lines ~f:String.to_list
+  |> List.transpose_exn
+  |> List.map ~f:String.of_list
+  |> List.map ~f:(String.substr_replace_all ~pattern:" " ~with_:"")
+  |> split_blocks [] []
+  |> List.map ~f:(process_block [])
+  |> sum
 ;;
 
 let%expect_test _ =
@@ -93,7 +90,6 @@ let%expect_test _ =
     ((cols ((123) (328) (51) (64))) (signs (* + * +)))
     ((cols ((6 45 123) (98 64 328) (215 387 51) (314 23 64))) (signs (* + * +)))
     ("part1 sample_1" 4277556)
-    (blocks ((4 431 623+) (175 581 32*) (8 248 369+) (356 24 1*)))
     ("part2 sample_1" 3263827)
     |}]
 ;;

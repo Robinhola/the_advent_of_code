@@ -6,7 +6,10 @@ open! Core
 
 let should_print_debug = ref false
 let debug sexp = if !should_print_debug then print_s sexp
-let sum = List.sum (module Int)
+let impossible () = raise_s [%message "impossible"]
+let sum' = List.sum (module Int)
+let sum = List.sum (module Int) ~f:Fn.id
+let mul = List.fold ~init:1 ~f:(fun a b -> a * b)
 let sample_1 = {||} |> String.split_lines
 
 let part1 (lines : string list) =
