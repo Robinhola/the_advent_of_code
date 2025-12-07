@@ -32,22 +32,22 @@ let sample_1 =
   |> String.split_lines
 ;;
 
+let beam_down_exn t c =
+  let down = Matrix.next t c Dir.Down |> Option.value_exn in
+  match Matrix.get t down with
+  | '.' ->
+    Matrix.set t down '|';
+    [ down ]
+  | '|' -> []
+  | '^' -> [ Dir.Left; Dir.Right ] |> List.filter_map ~f:(Matrix.next t down)
+  | _ -> impossible ()
+;;
+
 let rec beam_down t i previous_beams =
   if i + 1 >= (Matrix.dims t).y
   then t
-  else (
-    let next_beams =
-      List.map previous_beams ~f:(fun c ->
-        let down = Matrix.next t c Dir.Down |> Option.value_exn in
-        match Matrix.get t down with
-        | '.' ->
-          Matrix.set t down '|';
-          [ down ]
-        | '|' -> []
-        | '^' -> [ Dir.Left; Dir.Right ] |> List.filter_map ~f:(Matrix.next t down)
-        | _ -> impossible ())
-    in
-    beam_down t (i + 1) (List.concat next_beams))
+  else
+    previous_beams |> List.map ~f:(beam_down_exn t) |> List.concat |> beam_down t (i + 1)
 ;;
 
 let count_splits t =
@@ -86,13 +86,13 @@ let rec beam_down' t ~seen c =
   | None ->
     let result =
       let down = Matrix.next t c Dir.Down in
-      match Option.map down ~f:(Matrix.get t) with
-      | Some '.' -> beam_down' t ~seen (Option.value_exn down)
-      | Some '^' ->
+      match Option.map down ~f:(Matrix.get t), down with
+      | None, None -> 1
+      | Some '.', Some down -> beam_down' t ~seen down
+      | Some '^', Some down ->
         [ Dir.Left; Dir.Right ]
-        |> List.filter_map ~f:(Matrix.next t (Option.value_exn down))
+        |> List.filter_map ~f:(Matrix.next t down)
         |> sum' ~f:(beam_down' ~seen t)
-      | None -> 1
       | _ -> impossible ()
     in
     Hashtbl.add_exn seen ~key:c ~data:result;
