@@ -36,12 +36,17 @@ let sample_1 =
   |> String.split_lines
 ;;
 
-type t =
-  { x : int
-  ; y : int
-  ; z : int
-  }
-[@@deriving sexp]
+module T = struct
+  type t =
+    { x : int
+    ; y : int
+    ; z : int
+    }
+  [@@deriving sexp, compare, equal, hash]
+end
+
+include T
+module Table = Hashtbl.Make (T)
 
 let parse s =
   match String.split s ~on:',' with
@@ -60,54 +65,73 @@ let print_d circuits =
   debug [%message "---------------"]
 ;;
 
-let rec connect' circuits index connections =
-  (*print_d circuits;*)
-  let n = List.length connections in
-  if n % 1_000 = 0 then print_s [%message (n : int)];
+let number = ref 0
+
+let rec connect'
+          ~(nodes_to_circuits : string Table.t)
+          ~(circuits_to_nodes : t list String.Table.t)
+          (index : int)
+          (connections : (t * t) list)
+  =
+  if List.length connections % 1000 = 0
+  then print_s [%message (List.length connections : int)];
   if index = 0
-  then circuits
+  then circuits_to_nodes, nodes_to_circuits
   else (
     match connections with
-    | [] -> circuits
+    | [] -> circuits_to_nodes, nodes_to_circuits
     | (a, b) :: rest ->
-      let is_in_circuit x =
-        Array.findi circuits ~f:(fun _ group ->
-          List.find group ~f:(equal x) |> Option.is_some)
-      in
-      let a_in_circuit = is_in_circuit a in
-      let b_in_circuit = is_in_circuit b in
+      let is_in_circuit node = Hashtbl.find nodes_to_circuits node in
       let add_to_new_group a b =
-        (*debug [%message "new group" (a : t) (b : t)];*)
-        let new_circuit = Array.of_list [ [ a; b ] ] in
-        let circuits = Array.append circuits new_circuit in
-        connect' circuits (index - 1) rest
+        let group = Int.to_string !number in
+        let () = number := !number + 1 in
+        Hashtbl.add_exn nodes_to_circuits ~key:a ~data:group;
+        Hashtbl.add_exn nodes_to_circuits ~key:b ~data:group;
+        Hashtbl.add_exn circuits_to_nodes ~key:group ~data:[ a; b ];
+        debug [%message "New group" (group : string)]
       in
-      let add_to_exiting_circuit x i circuit =
-        (*debug [%message "existing circuit" (x : t)];*)
-        Array.set circuits i (x :: circuit);
-        connect' circuits (index - 1) rest
+      let add_to_group (a : t) (group : string) =
+        let nodes = Hashtbl.find_exn circuits_to_nodes group in
+        Hashtbl.set nodes_to_circuits ~key:a ~data:group;
+        Hashtbl.set circuits_to_nodes ~key:group ~data:(a :: nodes);
+        debug [%message "Add to group" (group : string)]
       in
-      let merge_circuits i circuit_i j circuit_j =
-        (*debug [%message "merging circuit" (i : int) (j : int)];*)
-        let new_circuit = circuit_i @ circuit_j in
-        (*debug [%message (Array.map circuits ~f:List.length : int array)];*)
-        Array.set circuits i new_circuit;
-        Array.set circuits j [];
-        (*let circuits =*)
-        (*  Array.filteri circuits ~f:(fun index _ -> not (Int.equal index j))*)
-        (*in*)
-        (*debug [%message (Array.map circuits ~f:List.length : int array)];*)
-        connect' circuits (index - 1) rest
+      let merge_groups a b =
+        let group = Hashtbl.find_exn nodes_to_circuits a in
+        let group' = Hashtbl.find_exn nodes_to_circuits b in
+        let nodes =
+          [ a; b ]
+          |> List.map ~f:(Hashtbl.find_exn nodes_to_circuits)
+          |> List.map ~f:(Hashtbl.find_exn circuits_to_nodes)
+          |> List.concat
+        in
+        Hashtbl.set nodes_to_circuits ~key:a ~data:group;
+        Hashtbl.set nodes_to_circuits ~key:b ~data:group;
+        Hashtbl.set circuits_to_nodes ~key:group ~data:nodes;
+        Hashtbl.set circuits_to_nodes ~key:group' ~data:[];
+        debug [%message "Merge groups" (group : string) (group' : string)]
       in
-      (match a_in_circuit, b_in_circuit with
-       | None, None -> add_to_new_group a b
-       | Some (i, circuit), None -> add_to_exiting_circuit b i circuit
-       | None, Some (i, circuit) -> add_to_exiting_circuit a i circuit
-       | Some (i, circuit_i), Some (j, circuit_j) when i = j ->
-         (*debug [%message "nothing happens!" (a : t) (b : t)];*)
-         connect' circuits (index - 1) rest
-       | Some (i, circuit_i), Some (j, circuit_j) ->
-         merge_circuits i circuit_i j circuit_j))
+      let something_happened =
+        match is_in_circuit a, is_in_circuit b with
+        | None, None ->
+          add_to_new_group a b;
+          `Yes
+        | Some group, None ->
+          add_to_group b group;
+          `Yes
+        | None, Some group ->
+          add_to_group a group;
+          `Yes
+        | Some group, Some group' when String.equal group group' ->
+          debug [%message "Nothing to do"];
+          `Yes
+        | Some group, Some group' ->
+          merge_groups a b;
+          `Yes
+      in
+      (match something_happened with
+       | `Yes -> connect' ~nodes_to_circuits ~circuits_to_nodes (index - 1) rest
+       | `No -> connect' ~nodes_to_circuits ~circuits_to_nodes index rest))
 ;;
 
 let part1 (lines : string list) =
@@ -121,11 +145,16 @@ let part1 (lines : string list) =
       Int.compare ld rd)
   in
   print_s [%message (List.length sorted_coords : int)];
-  let index = if !should_print_debug then 10 else -1 in
-  let circuits = connect' (Array.of_list []) index sorted_coords in
+  let index = if !should_print_debug then 10 else 1000 in
+  let circuits_to_nodes = String.Table.of_alist_exn [] in
+  let nodes_to_circuits = Table.of_alist_exn [] in
+  let circuits = connect' ~nodes_to_circuits ~circuits_to_nodes index sorted_coords in
+  let circuits_to_nodes, nodes_to_circuits = circuits in
+  (*debug [%message (nodes_to_circuits : string Table.t)];*)
+  (*debug [%message (circuits_to_nodes : t list String.Table.t)];*)
   let lengths =
-    Array.map circuits ~f:List.length
-    |> Array.to_list
+    Hashtbl.data circuits_to_nodes
+    |> List.map ~f:List.length
     |> List.sort ~compare:Int.compare
     |> List.rev
   in
@@ -145,153 +174,16 @@ let%expect_test _ =
     {|
     ("List.cartesian_product [0] [1; 2; 3]" ((0 1) (0 2) (0 3)))
     ("List.length sorted_coords" 190)
-    ROBIN----------
-    ---------------
-    ("new group" (a ((x 425) (y 690) (z 689))) (b ((x 162) (y 817) (z 812))))
-    ROBIN----------
-    circuit
-    ((x 425) (y 690) (z 689))
-    ((x 162) (y 817) (z 812))
-    ---------------
-    ("existing circuit" (x ((x 431) (y 825) (z 988))))
-    ROBIN----------
-    circuit
-    ((x 431) (y 825) (z 988))
-    ((x 425) (y 690) (z 689))
-    ((x 162) (y 817) (z 812))
-    ---------------
-    ("new group" (a ((x 805) (y 96) (z 715))) (b ((x 906) (y 360) (z 560))))
-    ROBIN----------
-    circuit
-    ((x 431) (y 825) (z 988))
-    ((x 425) (y 690) (z 689))
-    ((x 162) (y 817) (z 812))
-    circuit
-    ((x 805) (y 96) (z 715))
-    ((x 906) (y 360) (z 560))
-    ---------------
-    ("nothing happens!" (a ((x 425) (y 690) (z 689)))
-     (b ((x 431) (y 825) (z 988))))
-    ROBIN----------
-    circuit
-    ((x 431) (y 825) (z 988))
-    ((x 425) (y 690) (z 689))
-    ((x 162) (y 817) (z 812))
-    circuit
-    ((x 805) (y 96) (z 715))
-    ((x 906) (y 360) (z 560))
-    ---------------
-    ("new group" (a ((x 984) (y 92) (z 344))) (b ((x 862) (y 61) (z 35))))
-    ROBIN----------
-    circuit
-    ((x 431) (y 825) (z 988))
-    ((x 425) (y 690) (z 689))
-    ((x 162) (y 817) (z 812))
-    circuit
-    ((x 805) (y 96) (z 715))
-    ((x 906) (y 360) (z 560))
-    circuit
-    ((x 984) (y 92) (z 344))
-    ((x 862) (y 61) (z 35))
-    ---------------
-    ("new group" (a ((x 117) (y 168) (z 530))) (b ((x 52) (y 470) (z 668))))
-    ROBIN----------
-    circuit
-    ((x 431) (y 825) (z 988))
-    ((x 425) (y 690) (z 689))
-    ((x 162) (y 817) (z 812))
-    circuit
-    ((x 805) (y 96) (z 715))
-    ((x 906) (y 360) (z 560))
-    circuit
-    ((x 984) (y 92) (z 344))
-    ((x 862) (y 61) (z 35))
-    circuit
-    ((x 117) (y 168) (z 530))
-    ((x 52) (y 470) (z 668))
-    ---------------
-    ("new group" (a ((x 941) (y 993) (z 340))) (b ((x 819) (y 987) (z 18))))
-    ROBIN----------
-    circuit
-    ((x 431) (y 825) (z 988))
-    ((x 425) (y 690) (z 689))
-    ((x 162) (y 817) (z 812))
-    circuit
-    ((x 805) (y 96) (z 715))
-    ((x 906) (y 360) (z 560))
-    circuit
-    ((x 984) (y 92) (z 344))
-    ((x 862) (y 61) (z 35))
-    circuit
-    ((x 117) (y 168) (z 530))
-    ((x 52) (y 470) (z 668))
-    circuit
-    ((x 941) (y 993) (z 340))
-    ((x 819) (y 987) (z 18))
-    ---------------
-    ("existing circuit" (x ((x 739) (y 650) (z 466))))
-    ROBIN----------
-    circuit
-    ((x 431) (y 825) (z 988))
-    ((x 425) (y 690) (z 689))
-    ((x 162) (y 817) (z 812))
-    circuit
-    ((x 739) (y 650) (z 466))
-    ((x 805) (y 96) (z 715))
-    ((x 906) (y 360) (z 560))
-    circuit
-    ((x 984) (y 92) (z 344))
-    ((x 862) (y 61) (z 35))
-    circuit
-    ((x 117) (y 168) (z 530))
-    ((x 52) (y 470) (z 668))
-    circuit
-    ((x 941) (y 993) (z 340))
-    ((x 819) (y 987) (z 18))
-    ---------------
-    ("existing circuit" (x ((x 346) (y 949) (z 466))))
-    ROBIN----------
-    circuit
-    ((x 346) (y 949) (z 466))
-    ((x 431) (y 825) (z 988))
-    ((x 425) (y 690) (z 689))
-    ((x 162) (y 817) (z 812))
-    circuit
-    ((x 739) (y 650) (z 466))
-    ((x 805) (y 96) (z 715))
-    ((x 906) (y 360) (z 560))
-    circuit
-    ((x 984) (y 92) (z 344))
-    ((x 862) (y 61) (z 35))
-    circuit
-    ((x 117) (y 168) (z 530))
-    ((x 52) (y 470) (z 668))
-    circuit
-    ((x 941) (y 993) (z 340))
-    ((x 819) (y 987) (z 18))
-    ---------------
-    ("merging circuit" (i 2) (j 1))
-    ("Array.map circuits ~f:List.length" (4 3 2 2 2))
-    ("Array.map circuits ~f:List.length" (4 5 2 2))
-    ROBIN----------
-    circuit
-    ((x 346) (y 949) (z 466))
-    ((x 431) (y 825) (z 988))
-    ((x 425) (y 690) (z 689))
-    ((x 162) (y 817) (z 812))
-    circuit
-    ((x 984) (y 92) (z 344))
-    ((x 862) (y 61) (z 35))
-    ((x 739) (y 650) (z 466))
-    ((x 805) (y 96) (z 715))
-    ((x 906) (y 360) (z 560))
-    circuit
-    ((x 117) (y 168) (z 530))
-    ((x 52) (y 470) (z 668))
-    circuit
-    ((x 941) (y 993) (z 340))
-    ((x 819) (y 987) (z 18))
-    ---------------
+    ("New group" (group 0))
+    ("Add to group" (group 0))
+    ("New group" (group 1))
+    "Nothing to do"
+    ("New group" (group 2))
+    ("New group" (group 3))
+    ("New group" (group 4))
+    ("Add to group" (group 1))
+    ("Add to group" (group 0))
+    ("Merge groups" (group 2) (group' 1))
     (top_3 (5 4 2))
     ("part1 sample_1" 40)
     ("part2 sample_1" 0)
