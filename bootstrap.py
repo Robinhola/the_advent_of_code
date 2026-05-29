@@ -25,9 +25,9 @@ def copy_default_project(default_project, folder_name):
 
 def main():
     print("Bootstraping Ocaml advent of code")
-    year = ask_for_number("Enter the year", 2015, 2025)
+    year = ask_for_number("Enter the year", 2015, 2026)
     day = ask_for_number("Enter the day", 1, 25)
-    coding_language = input("Enter the coding languaage (python or ocaml): ")
+    coding_language = input("Enter the coding languaage (python or ocaml or cpp): ")
     folder_name = f'{year}_{"%02d"%day}_{coding_language}'
 
     print("Create folder")
