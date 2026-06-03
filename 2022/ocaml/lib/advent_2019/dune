@@ -1,0 +1,6 @@
+(library
+ (name advent_2019)
+ (inline_tests)
+ (libraries base core ppx_let advent_util)
+ (preprocess
+  (pps ppx_jane ppx_inline_test)))

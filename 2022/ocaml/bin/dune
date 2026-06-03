@@ -1,0 +1,7 @@
+(executable
+ (public_name ocaml)
+ (name main)
+ (libraries
+  advent_2019
+  advent_2022
+  advent_util))

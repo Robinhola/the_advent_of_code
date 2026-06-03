@@ -1,0 +1,9 @@
+IndentWidth: 4
+
+AlignConsecutiveAssignments:
+  Enabled: true
+
+AlignOperands: Align
+BreakBeforeBinaryOperators: NonAssignment
+
+Standard: c++20

@@ -1,8 +1,10 @@
 #include <array>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <ranges>
+#include <set>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -24,15 +26,7 @@ struct Args {
 
 struct Line {};
 
-std::istream &operator>>(std::istream &is, Line &line) {
-    // parses header: w1 w2 w3
-    // std::string rest;
-    // std::getline(is, line.header, ':');
-    // std::getline(is, rest);
-    // std::istringstream ss(rest);
-    // line.values = {std::istream_iterator<std::string>(ss), {}};
-    return is;
-}
+std::istream &operator>>(std::istream &is, Line &line) { return is; }
 
 std::ostream &operator<<(std::ostream &os, const Line &line) { return os; }
 
