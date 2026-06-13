@@ -82,6 +82,7 @@ struct Parts {
     int open{0};
 
     explicit Parts(std::vector<Valve> &&valves) {
+        graph.reserve(valves.size());
         for (auto &v : valves) {
             auto key = v.name;
             if (v.flowRate)
@@ -91,8 +92,8 @@ struct Parts {
         valves.clear();
     }
 
-    std::unordered_map<std::string, int> &bfs(const std::string &valve) {
-        if (distances.contains(valve))
+    std::unordered_map<std::string, int> &bfs(std::string valve) {
+        if (distances.count(valve))
             return distances[valve];
 
         std::unordered_set<std::string> seen{valve};
@@ -103,7 +104,7 @@ struct Parts {
         while (queue.size()) {
             int size = queue.size();
             while (size-- > 0) {
-                auto &node = queue.front();
+                std::string node = queue.front();
                 queue.pop();
                 distances[valve][node] = distance;
                 for (auto &v : graph[node].leads) {
@@ -148,95 +149,70 @@ struct Parts {
 
     struct Position {
         std::string where;
-        int timeLeft;
-
-        operator std::string() { return timeLeft > 0 ? where : "AA"; }
-        operator int() { return timeLeft; }
+        int nextMinuteCanDoSomething;
     };
 
-    int bt2(Position me, Position el) {
-        if (me.timeLeft <= 0 && el.timeLeft <= 0)
-            return 0;
-
-        std::cout << "Me: " << me.where << " Elephant: " << el.where
-                  << std::endl;
-
-        int ifWeOpen = 0;
-
-        auto openValve = [&](auto &who) {
-            if (who.timeLeft <= 0)
-                return 0;
-            auto &where = graph[who];
-            if (where.flowRate == 0)
-                return 0;
-            who.timeLeft--;
-            assert(where.flowRate != 0);
-            int result                 = who.timeLeft * where.flowRate;
-            graph[where.name].flowRate = 0;
-            assert(where.flowRate == 0);
-            return result;
-        };
-
-        ifWeOpen += openValve(me);
-        ifWeOpen += openValve(el);
-
+    std::vector<std::string> getAllOpened() {
         std::vector<std::string> opened;
         for (auto &[k, v] : graph) {
-            if (v.flowRate) {
+            if (v.flowRate)
                 opened.push_back(k);
-            }
         }
-        std::sort(opened.begin(), opened.end(), [&](auto &a, auto &b) {
-            return graph[a].flowRate > graph[b].flowRate;
-        });
+        return opened;
+    }
 
-        // otherwise need to handle case = 1
-        assert(opened.size() % 2 == 0);
-
-        if (opened.size() < 2)
+    int bt2(Position me, Position el, int timeLeft) {
+        if (timeLeft <= 0)
             return 0;
 
-        // the greatest closest to me
-        // the greatest closest to el
-        // for each unique couple,
-        auto calc = [&](auto &who, auto &where) {
-            int timeLeft = who.timeLeft - bfs(who)[where.name] - 1;
-            return timeLeft * where.flowRate;
+        std::vector<std::string> opened = getAllOpened();
+        if (opened.empty())
+            return 0;
+
+        // for me && el if they can do something open and move to the next one
+        auto openValve = [&](Position &who, std::string closest) {
+            if (who.nextMinuteCanDoSomething < timeLeft
+                || graph[closest].flowRate == 0)
+                return 0;
+
+            int distance = bfs(who.where)[closest];
+            if (distance + 1 < timeLeft) {
+                who.nextMinuteCanDoSomething = timeLeft - distance - 1;
+                who.where                    = closest;
+            } else {
+                who.nextMinuteCanDoSomething = 0;
+            }
+
+            int flowRate              = graph[who.where].flowRate;
+            graph[who.where].flowRate = 0;
+
+            return who.nextMinuteCanDoSomething * flowRate;
         };
 
         int bestSoFar = 0;
-        auto &forMe   = opened[0];
-        auto &forEl   = opened[1];
+        for (auto closest : opened) {
+            Position backupMe = me;
+            Position backupEl = el;
+            int flowRate      = graph[closest].flowRate;
 
-        for (int i = 0; i < opened.size() - 1; ++i) {
-            auto first = graph[opened[i]];
-            for (int j = i + 1; j < opened.size(); ++j) {
-                auto second = graph[opened[j]];
-                assert(first.flowRate >= second.flowRate);
+            if (flowRate == 0)
+                continue;
 
-                int ifMeGoesToFirst = (calc(me, first) + calc(el, second));
-                int ifElGoesToFirst = (calc(el, first) + calc(me, second));
+            int ifWeTakeThisOne =
+                openValve(me, closest) + openValve(el, closest);
+            int nextInterestingTime = std::max(me.nextMinuteCanDoSomething,
+                                               el.nextMinuteCanDoSomething);
 
-                if (ifMeGoesToFirst > bestSoFar
-                    && ifMeGoesToFirst > ifElGoesToFirst) {
-                    forMe     = first.name;
-                    forEl     = second.name;
-                    bestSoFar = ifMeGoesToFirst;
-                } else if (ifElGoesToFirst > bestSoFar
-                           && ifElGoesToFirst > ifMeGoesToFirst) {
-                    forEl     = first.name;
-                    forMe     = second.name;
-                    bestSoFar = ifElGoesToFirst;
-                }
-            }
+            bestSoFar = std::max(
+                bestSoFar, ifWeTakeThisOne + bt2(me, el, nextInterestingTime));
+
+            assert(graph[closest].flowRate == 0 || ifWeTakeThisOne == 0);
+            graph[closest].flowRate = flowRate;
+            me                      = backupMe;
+            el                      = backupEl;
         }
 
-        int bestFromHere = bt2({forMe, me.timeLeft - bfs(me)[forMe]},
-                               {forEl, el.timeLeft - bfs(el)[forEl]});
-
-        // graph[me].flowRate = flowRateMe;
-        // graph[el].flowRate = flowRateEl;
-        return bestFromHere + ifWeOpen;
+        return bestSoFar;
     }
 
     int part1() {
@@ -246,7 +222,7 @@ struct Parts {
         return bt("AA", 30);
     }
 
-    int part2() { return bt2({"AA", 26}, {"AA", 26}); }
+    int part2() { return bt2({"AA", 26}, {"AA", 26}, 26); }
 };
 
 int main(int argc, char *argv[]) {

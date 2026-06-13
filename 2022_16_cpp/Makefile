@@ -13,6 +13,8 @@ debug: format main.cpp
 lldb: debug
 	lldb main
 
+db: lldb
+
 perf: format main.cpp
 	clang++ -std=c++20 -g -O3 -o main main.cpp
 	xcrun xctrace record --template "Time Profiler" --launch main
