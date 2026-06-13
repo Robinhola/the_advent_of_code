@@ -158,23 +158,27 @@ struct Parts {
         if (me.timeLeft <= 0 && el.timeLeft <= 0)
             return 0;
 
+        std::cout << "Me: " << me.where << " Elephant: " << el.where
+                  << std::endl;
+
         int ifWeOpen = 0;
 
-        int flowRateMe = graph[me].flowRate;
-        if (me.timeLeft > 0) {
-            if (flowRateMe != 0)
-                me.timeLeft--;
-            ifWeOpen += flowRateMe * me.timeLeft;
-            graph[me].flowRate = 0;
-        }
+        auto openValve = [&](auto &who) {
+            if (who.timeLeft <= 0)
+                return 0;
+            auto &where = graph[who];
+            if (where.flowRate == 0)
+                return 0;
+            who.timeLeft--;
+            assert(where.flowRate != 0);
+            int result                 = who.timeLeft * where.flowRate;
+            graph[where.name].flowRate = 0;
+            assert(where.flowRate == 0);
+            return result;
+        };
 
-        int flowRateEl = graph[el].flowRate;
-        if (el.timeLeft > 0) {
-            if (flowRateMe != 0)
-                el.timeLeft--;
-            ifWeOpen += flowRateMe * el.timeLeft;
-            graph[el].flowRate = 0;
-        }
+        ifWeOpen += openValve(me);
+        ifWeOpen += openValve(el);
 
         std::vector<std::string> opened;
         for (auto &[k, v] : graph) {
@@ -189,28 +193,49 @@ struct Parts {
         // otherwise need to handle case = 1
         assert(opened.size() % 2 == 0);
 
-        int bestFromHere = 0;
+        if (opened.size() < 2)
+            return 0;
+
+        // the greatest closest to me
+        // the greatest closest to el
+        // for each unique couple,
+        auto calc = [&](auto &who, auto &where) {
+            int timeLeft = who.timeLeft - bfs(who)[where.name] - 1;
+            return timeLeft * where.flowRate;
+        };
+
+        int bestSoFar = 0;
+        auto &forMe   = opened[0];
+        auto &forEl   = opened[1];
+
         for (int i = 0; i < opened.size() - 1; ++i) {
-            auto &first = opened[i];
+            auto first = graph[opened[i]];
             for (int j = i + 1; j < opened.size(); ++j) {
-                auto &second = opened[j];
-                assert(graph[first].flowRate >= graph[second].flowRate);
-                if (bfs(me)[first] < bfs(el)[first]) {
-                    bestFromHere =
-                        std::max(bestFromHere,
-                                 bt2({first, me.timeLeft - bfs(me)[first]},
-                                     {second, el.timeLeft - bfs(el)[second]}));
-                } else {
-                    bestFromHere =
-                        std::max(bestFromHere,
-                                 bt2({second, me.timeLeft - bfs(me)[second]},
-                                     {first, el.timeLeft - bfs(el)[first]}));
+                auto second = graph[opened[j]];
+                assert(first.flowRate >= second.flowRate);
+
+                int ifMeGoesToFirst = (calc(me, first) + calc(el, second));
+                int ifElGoesToFirst = (calc(el, first) + calc(me, second));
+
+                if (ifMeGoesToFirst > bestSoFar
+                    && ifMeGoesToFirst > ifElGoesToFirst) {
+                    forMe     = first.name;
+                    forEl     = second.name;
+                    bestSoFar = ifMeGoesToFirst;
+                } else if (ifElGoesToFirst > bestSoFar
+                           && ifElGoesToFirst > ifMeGoesToFirst) {
+                    forEl     = first.name;
+                    forMe     = second.name;
+                    bestSoFar = ifElGoesToFirst;
                 }
             }
         }
 
-        graph[me].flowRate = flowRateMe;
-        graph[el].flowRate = flowRateEl;
+        int bestFromHere = bt2({forMe, me.timeLeft - bfs(me)[forMe]},
+                               {forEl, el.timeLeft - bfs(el)[forEl]});
+
+        // graph[me].flowRate = flowRateMe;
+        // graph[el].flowRate = flowRateEl;
         return bestFromHere + ifWeOpen;
     }
 
