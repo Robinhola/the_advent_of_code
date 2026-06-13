@@ -1,4 +1,6 @@
+#include <algorithm>
 #include <array>
+#include <cassert>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -74,8 +76,152 @@ std::ostream &operator<<(std::ostream &os, const Valve &valve) {
 }
 
 struct Parts {
-    int part1() { return 0; }
-    int part2() { return 0; }
+    std::unordered_map<std::string, Valve> graph;
+    std::unordered_map<std::string, std::unordered_map<std::string, int>>
+        distances;
+    int open{0};
+
+    explicit Parts(std::vector<Valve> &&valves) {
+        for (auto &v : valves) {
+            auto key = v.name;
+            if (v.flowRate)
+                open++;
+            graph.emplace(key, std::move(v));
+        }
+        valves.clear();
+    }
+
+    std::unordered_map<std::string, int> &bfs(const std::string &valve) {
+        if (distances.contains(valve))
+            return distances[valve];
+
+        std::unordered_set<std::string> seen{valve};
+        std::queue<std::string> queue;
+        queue.push(valve);
+
+        int distance = 0;
+        while (queue.size()) {
+            int size = queue.size();
+            while (size-- > 0) {
+                auto &node = queue.front();
+                queue.pop();
+                distances[valve][node] = distance;
+                for (auto &v : graph[node].leads) {
+                    if (seen.count(v))
+                        continue;
+                    seen.insert(v);
+                    queue.push(v);
+                }
+            }
+            distance++;
+        }
+
+        return distances[valve];
+    }
+
+    int bt(const std::string &valve, int minutesLeft) {
+        if (minutesLeft <= 0)
+            return 0;
+
+        // we always open the valve
+        int flowRate = graph[valve].flowRate;
+        int ifWeOpen = 0;
+        if (flowRate != 0) {
+            minutesLeft--;
+            ifWeOpen = flowRate * minutesLeft;
+        } else {
+            assert(valve == "AA");
+        }
+
+        graph[valve].flowRate = 0;
+        int bestFromHere      = 0;
+        for (auto &[next, distance] : bfs(valve)) {
+            if (graph[next].flowRate) {
+                bestFromHere =
+                    std::max(bestFromHere, bt(next, minutesLeft - distance));
+            }
+        }
+
+        graph[valve].flowRate = flowRate;
+        return bestFromHere + ifWeOpen;
+    }
+
+    struct Position {
+        std::string where;
+        int timeLeft;
+
+        operator std::string() { return timeLeft > 0 ? where : "AA"; }
+        operator int() { return timeLeft; }
+    };
+
+    int bt2(Position me, Position el) {
+        if (me.timeLeft <= 0 && el.timeLeft <= 0)
+            return 0;
+
+        int ifWeOpen = 0;
+
+        int flowRateMe = graph[me].flowRate;
+        if (me.timeLeft > 0) {
+            if (flowRateMe != 0)
+                me.timeLeft--;
+            ifWeOpen += flowRateMe * me.timeLeft;
+            graph[me].flowRate = 0;
+        }
+
+        int flowRateEl = graph[el].flowRate;
+        if (el.timeLeft > 0) {
+            if (flowRateMe != 0)
+                el.timeLeft--;
+            ifWeOpen += flowRateMe * el.timeLeft;
+            graph[el].flowRate = 0;
+        }
+
+        std::vector<std::string> opened;
+        for (auto &[k, v] : graph) {
+            if (v.flowRate) {
+                opened.push_back(k);
+            }
+        }
+        std::sort(opened.begin(), opened.end(), [&](auto &a, auto &b) {
+            return graph[a].flowRate > graph[b].flowRate;
+        });
+
+        // otherwise need to handle case = 1
+        assert(opened.size() % 2 == 0);
+
+        int bestFromHere = 0;
+        for (int i = 0; i < opened.size() - 1; ++i) {
+            auto &first = opened[i];
+            for (int j = i + 1; j < opened.size(); ++j) {
+                auto &second = opened[j];
+                assert(graph[first].flowRate >= graph[second].flowRate);
+                if (bfs(me)[first] < bfs(el)[first]) {
+                    bestFromHere =
+                        std::max(bestFromHere,
+                                 bt2({first, me.timeLeft - bfs(me)[first]},
+                                     {second, el.timeLeft - bfs(el)[second]}));
+                } else {
+                    bestFromHere =
+                        std::max(bestFromHere,
+                                 bt2({second, me.timeLeft - bfs(me)[second]},
+                                     {first, el.timeLeft - bfs(el)[first]}));
+                }
+            }
+        }
+
+        graph[me].flowRate = flowRateMe;
+        graph[el].flowRate = flowRateEl;
+        return bestFromHere + ifWeOpen;
+    }
+
+    int part1() {
+        // find all open and distance from here
+        // try each open
+        // all turned off stop
+        return bt("AA", 30);
+    }
+
+    int part2() { return bt2({"AA", 26}, {"AA", 26}); }
 };
 
 int main(int argc, char *argv[]) {
@@ -83,11 +229,11 @@ int main(int argc, char *argv[]) {
 
     std::vector<Valve> valves;
     for (auto &&v : std::ranges::istream_view<Valve>(*args.input)) {
-        std::cout << v << std::endl;
         valves.push_back(std::move(v));
     }
 
-    Parts p{};
+    Parts p{std::move(valves)};
+
     std::cout << p.part1() << std::endl;
     std::cout << p.part2() << std::endl;
 }
