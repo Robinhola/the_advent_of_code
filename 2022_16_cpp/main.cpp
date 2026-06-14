@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <bitset>
 #include <cassert>
 #include <fstream>
 #include <iostream>
@@ -161,68 +162,125 @@ struct Parts {
         return opened;
     }
 
-    int bt2(Position me, Position el, int timeLeft) {
-        if (timeLeft <= 0)
-            return 0;
-
-        std::vector<std::string> opened = getAllOpened();
-        if (opened.empty())
-            return 0;
-
-        // for me && el if they can do something open and move to the next one
-        auto openValve = [&](Position &who, std::string closest) {
-            if (who.nextMinuteCanDoSomething < timeLeft
-                || graph[closest].flowRate == 0)
-                return 0;
-
-            int distance = bfs(who.where)[closest];
-            if (distance + 1 < timeLeft) {
-                who.nextMinuteCanDoSomething = timeLeft - distance - 1;
-                who.where                    = closest;
-            } else {
-                who.nextMinuteCanDoSomething = 0;
-            }
-
-            int flowRate              = graph[who.where].flowRate;
-            graph[who.where].flowRate = 0;
-
-            return who.nextMinuteCanDoSomething * flowRate;
-        };
-
-        int bestSoFar = 0;
-        for (auto closest : opened) {
-            Position backupMe = me;
-            Position backupEl = el;
-            int flowRate      = graph[closest].flowRate;
-
-            if (flowRate == 0)
-                continue;
-
-            int ifWeTakeThisOne =
-                openValve(me, closest) + openValve(el, closest);
-            int nextInterestingTime = std::max(me.nextMinuteCanDoSomething,
-                                               el.nextMinuteCanDoSomething);
-
-            bestSoFar = std::max(
-                bestSoFar, ifWeTakeThisOne + bt2(me, el, nextInterestingTime));
-
-            assert(graph[closest].flowRate == 0 || ifWeTakeThisOne == 0);
-            graph[closest].flowRate = flowRate;
-            me                      = backupMe;
-            el                      = backupEl;
-        }
-
-        return bestSoFar;
-    }
-
     int part1() {
         // find all open and distance from here
         // try each open
         // all turned off stop
-        return bt("AA", 30);
+        auto opened = getAllOpened();
+        std::sort(opened.begin(), opened.end(), [&](auto a, auto b) {
+            return graph[a].flowRate > graph[b].flowRate;
+        });
+        int fullMask = 0;
+        for (int i = 0; i < opened.size(); ++i) {
+            flowRates[1 << i] = graph[opened[i]].flowRate;
+            fullMask += 1 << i;
+        }
+
+        auto best = [&](auto &self, int timeLeft, std::string start, int mask) {
+            if (timeLeft <= 0 || mask == 0)
+                return 0;
+
+            int result = 0;
+            for (int i = 0; i < opened.size(); ++i) {
+                if ((mask & (1 << i)) == 0)
+                    continue;
+                int distance = bfs(start)[opened[i]];
+
+                timeLeft -= (distance + 1);
+                mask ^= (1 << i);
+
+                int released   = timeLeft * flowRates[1 << i];
+                int fromOthers = self(self, timeLeft, opened[i], mask);
+                result         = std::max(result, released + fromOthers);
+
+                mask ^= (1 << i);
+                timeLeft += (distance + 1);
+            }
+
+            return result;
+        };
+
+        std::vector<int> combinations;
+        auto combination = [&](auto &self, int i, int num) {
+            if (i >= opened.size()) {
+                combinations.push_back(num);
+                return;
+            }
+            self(self, i + 1, num + (1 << i));
+            self(self, i + 1, num);
+        };
+
+        combination(combination, 0, 0);
+        int result = best(best, 30, "AA", combinations.front());
+        return result;
     }
 
-    int part2() { return bt2({"AA", 26}, {"AA", 26}, 26); }
+    std::unordered_map<int, int> flowRates;
+    std::unordered_map<std::string,
+                       std::array<std::unordered_map<int, int>, 30>>
+        cache;
+
+    int part2() {
+        // 16 valves to visit
+        // 8 per group
+        // 01010111000
+        // for each vavle
+        // open it distance is distance between 0 and i
+        auto opened = getAllOpened();
+        std::sort(opened.begin(), opened.end(), [&](auto a, auto b) {
+            return graph[a].flowRate > graph[b].flowRate;
+        });
+        int fullMask = 0;
+        for (int i = 0; i < opened.size(); ++i) {
+            flowRates[1 << i] = graph[opened[i]].flowRate;
+            fullMask += 1 << i;
+        }
+
+        auto best = [&](auto &self, int timeLeft, std::string start, int mask) {
+            if (timeLeft <= 0 || mask == 0)
+                return 0;
+
+            if (cache[start][timeLeft].count(mask))
+                return cache[start][timeLeft][mask];
+
+            int result = 0;
+            for (int i = 0; i < opened.size(); ++i) {
+                if ((mask & (1 << i)) == 0)
+                    continue;
+                int distance = bfs(start)[opened[i]];
+
+                timeLeft -= (distance + 1);
+                mask ^= (1 << i);
+
+                int released   = timeLeft * flowRates[1 << i];
+                int fromOthers = self(self, timeLeft, opened[i], mask);
+                result         = std::max(result, released + fromOthers);
+
+                mask ^= (1 << i);
+                timeLeft += (distance + 1);
+            }
+
+            return cache[start][timeLeft][mask] = result;
+        };
+
+        std::vector<int> combinations;
+        auto combination = [&](auto &self, int i, int num) {
+            if (i >= opened.size()) {
+                combinations.push_back(num);
+                return;
+            }
+            self(self, i + 1, num + (1 << i));
+            self(self, i + 1, num);
+        };
+
+        combination(combination, 0, 0);
+        int result = 0;
+        for (auto c : combinations) {
+            result = std::max(result, best(best, 26, "AA", c)
+                                          + best(best, 26, "AA", c ^ fullMask));
+        }
+        return result;
+    }
 };
 
 int main(int argc, char *argv[]) {
