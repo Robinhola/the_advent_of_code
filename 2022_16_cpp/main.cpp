@@ -77,20 +77,29 @@ std::ostream &operator<<(std::ostream &os, const Valve &valve) {
 }
 
 struct Parts {
-    std::unordered_map<std::string, Valve> graph;
-    std::unordered_map<std::string, std::unordered_map<std::string, int>>
-        distances;
-    int open{0};
+    template <typename K, typename V> using Map = std::unordered_map<K, V>;
+
+    Map<std::string, Valve> graph                         = {};
+    Map<std::string, Map<std::string, int>> distances     = {};
+    Map<int, int> flowRates                               = {};
+    Map<std::string, std::array<Map<int, int>, 31>> cache = {};
+    std::vector<std::string> opened                       = {};
+    int fullMask                                          = {0};
 
     explicit Parts(std::vector<Valve> &&valves) {
         graph.reserve(valves.size());
         for (auto &v : valves) {
             auto key = v.name;
-            if (v.flowRate)
-                open++;
             graph.emplace(key, std::move(v));
         }
         valves.clear();
+
+        opened   = getAllOpened();
+        fullMask = 0;
+        for (int i = 0; i < opened.size(); ++i) {
+            flowRates[1 << i] = graph[opened[i]].flowRate;
+            fullMask += 1 << i;
+        }
     }
 
     std::unordered_map<std::string, int> &bfs(std::string valve) {
@@ -121,104 +130,60 @@ struct Parts {
         return distances[valve];
     }
 
-    int bt(const std::string &valve, int minutesLeft) {
-        if (minutesLeft <= 0)
-            return 0;
-
-        // we always open the valve
-        int flowRate = graph[valve].flowRate;
-        int ifWeOpen = 0;
-        if (flowRate != 0) {
-            minutesLeft--;
-            ifWeOpen = flowRate * minutesLeft;
-        } else {
-            assert(valve == "AA");
-        }
-
-        graph[valve].flowRate = 0;
-        int bestFromHere      = 0;
-        for (auto &[next, distance] : bfs(valve)) {
-            if (graph[next].flowRate) {
-                bestFromHere =
-                    std::max(bestFromHere, bt(next, minutesLeft - distance));
-            }
-        }
-
-        graph[valve].flowRate = flowRate;
-        return bestFromHere + ifWeOpen;
-    }
-
-    struct Position {
-        std::string where;
-        int nextMinuteCanDoSomething;
-    };
-
     std::vector<std::string> getAllOpened() {
         std::vector<std::string> opened;
         for (auto &[k, v] : graph) {
             if (v.flowRate)
                 opened.push_back(k);
         }
+        std::sort(opened.begin(), opened.end(), [&](auto a, auto b) {
+            return graph[a].flowRate > graph[b].flowRate;
+        });
         return opened;
     }
+
+    int best(int timeLeft, std::string start, int mask) {
+        if (timeLeft <= 0 || mask == 0)
+            return 0;
+
+        if (cache[start][timeLeft].count(mask))
+            return cache[start][timeLeft][mask];
+
+        int result = 0;
+        for (int i = 0; i < opened.size(); ++i) {
+            if ((mask & (1 << i)) == 0)
+                continue;
+            int distance = bfs(start)[opened[i]];
+
+            timeLeft -= (distance + 1);
+            mask ^= (1 << i);
+
+            int released   = timeLeft * flowRates[1 << i];
+            int fromOthers = best(timeLeft, opened[i], mask);
+            result         = std::max(result, released + fromOthers);
+
+            mask ^= (1 << i);
+            timeLeft += (distance + 1);
+        }
+
+        return cache[start][timeLeft][mask] = result;
+    };
 
     int part1() {
         // find all open and distance from here
         // try each open
         // all turned off stop
-        auto opened = getAllOpened();
-        std::sort(opened.begin(), opened.end(), [&](auto a, auto b) {
-            return graph[a].flowRate > graph[b].flowRate;
-        });
-        int fullMask = 0;
-        for (int i = 0; i < opened.size(); ++i) {
-            flowRates[1 << i] = graph[opened[i]].flowRate;
-            fullMask += 1 << i;
-        }
-
-        auto best = [&](auto &self, int timeLeft, std::string start, int mask) {
-            if (timeLeft <= 0 || mask == 0)
-                return 0;
-
-            int result = 0;
-            for (int i = 0; i < opened.size(); ++i) {
-                if ((mask & (1 << i)) == 0)
-                    continue;
-                int distance = bfs(start)[opened[i]];
-
-                timeLeft -= (distance + 1);
-                mask ^= (1 << i);
-
-                int released   = timeLeft * flowRates[1 << i];
-                int fromOthers = self(self, timeLeft, opened[i], mask);
-                result         = std::max(result, released + fromOthers);
-
-                mask ^= (1 << i);
-                timeLeft += (distance + 1);
-            }
-
-            return result;
-        };
-
-        std::vector<int> combinations;
-        auto combination = [&](auto &self, int i, int num) {
-            if (i >= opened.size()) {
-                combinations.push_back(num);
-                return;
-            }
-            self(self, i + 1, num + (1 << i));
-            self(self, i + 1, num);
-        };
-
-        combination(combination, 0, 0);
-        int result = best(best, 30, "AA", combinations.front());
-        return result;
+        return best(30, "AA", fullMask);
     }
 
-    std::unordered_map<int, int> flowRates;
-    std::unordered_map<std::string,
-                       std::array<std::unordered_map<int, int>, 30>>
-        cache;
+    void combination (std::vector<int>& combinations, int i, int num) {
+        if (i >= opened.size()) {
+            combinations.push_back(num);
+            return;
+        }
+        combination(combinations, i + 1, num + (1 << i));
+        combination(combinations, i + 1, num);
+    };
 
     int part2() {
         // 16 valves to visit
@@ -226,59 +191,24 @@ struct Parts {
         // 01010111000
         // for each vavle
         // open it distance is distance between 0 and i
-        auto opened = getAllOpened();
-        std::sort(opened.begin(), opened.end(), [&](auto a, auto b) {
-            return graph[a].flowRate > graph[b].flowRate;
-        });
+        opened       = getAllOpened();
         int fullMask = 0;
         for (int i = 0; i < opened.size(); ++i) {
             flowRates[1 << i] = graph[opened[i]].flowRate;
             fullMask += 1 << i;
         }
 
-        auto best = [&](auto &self, int timeLeft, std::string start, int mask) {
-            if (timeLeft <= 0 || mask == 0)
-                return 0;
-
-            if (cache[start][timeLeft].count(mask))
-                return cache[start][timeLeft][mask];
-
-            int result = 0;
-            for (int i = 0; i < opened.size(); ++i) {
-                if ((mask & (1 << i)) == 0)
-                    continue;
-                int distance = bfs(start)[opened[i]];
-
-                timeLeft -= (distance + 1);
-                mask ^= (1 << i);
-
-                int released   = timeLeft * flowRates[1 << i];
-                int fromOthers = self(self, timeLeft, opened[i], mask);
-                result         = std::max(result, released + fromOthers);
-
-                mask ^= (1 << i);
-                timeLeft += (distance + 1);
-            }
-
-            return cache[start][timeLeft][mask] = result;
-        };
-
         std::vector<int> combinations;
-        auto combination = [&](auto &self, int i, int num) {
-            if (i >= opened.size()) {
-                combinations.push_back(num);
-                return;
-            }
-            self(self, i + 1, num + (1 << i));
-            self(self, i + 1, num);
-        };
+        combination(combinations, 0 , 0);
 
-        combination(combination, 0, 0);
         int result = 0;
-        for (auto c : combinations) {
-            result = std::max(result, best(best, 26, "AA", c)
-                                          + best(best, 26, "AA", c ^ fullMask));
+
+        for (int i = 0; i < combinations.size() / 2; ++i) {
+            auto c    = combinations[i];
+            int value = best(26, "AA", c) + best(26, "AA", c ^ fullMask);
+            result    = std::max(result, value);
         }
+
         return result;
     }
 };
