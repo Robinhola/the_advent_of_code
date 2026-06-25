@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <fstream>
@@ -64,6 +65,7 @@ struct Parts {
     using Coords = std::vector<Coord>;
 
     std::array<std::unordered_set<int>, 7> heights{};
+    std::array<int, 7> highests{};
     std::string *vents{};
     int highest = {-1};
     int vent    = {0};
@@ -105,8 +107,10 @@ struct Parts {
         for (auto [dx, dy] : deltaCoords) {
             if (x + dx < 0 || 7 <= x + dx || y + dy < 0)
                 return false;
-            if (heights[x + dx].contains(y + dy))
+            if (heights[x + dx].contains(y + dy)) {
+
                 return false;
+            }
         }
         return true;
     }
@@ -116,7 +120,8 @@ struct Parts {
         int my      = 0;
         for (auto [dx, dy] : deltaCoords) {
             heights[x + dx].insert(y + dy);
-            my = std::max(my, y + dy);
+            my               = std::max(my, y + dy);
+            highests[x + dx] = std::max(highests[x + dx], y + dy);
         }
         return my;
     }
@@ -133,12 +138,17 @@ struct Parts {
         std::cout << "+-------+\n" << std::endl;
     }
 
-    void printMove(Coord coord, const Coords &deltaCoords) {
+    int maxY(Coord coord, const Coords &deltaCoords) {
         int my = highest + 1;
         for (auto [dx, dy] : deltaCoords) {
             auto [x, y] = coord;
             my          = std::max(my, y + dy);
         }
+        return my;
+    }
+
+    void printMove(Coord coord, const Coords &deltaCoords) {
+        int my = maxY(coord, deltaCoords);
 
         std::vector<std::string> lines(my + 1, "|.......|");
 
@@ -156,12 +166,28 @@ struct Parts {
         std::cout << "+-------+" << std::endl;
     }
 
+    bool hasNewFloor() {
+        int x = highests[0];
+        for (auto v : highests) {
+            if (v != x)
+                return false;
+        }
+        return true;
+    }
+
     int part1() {
         // for each piece,
         // check as if affected by jet
         // check as if affected by gravity
         // update
-        while (piece < 2022) {
+        int last     = highest;
+        long start   = 12040; // 5180;
+        long pattern = 1695;  // 105;
+        long growth  = 2671;  // 159;
+        long goal    = 1;     // 5;
+
+        while (piece < start + (((long)1000000000000 - start) % pattern)) {
+            // while (piece < ((long)1000000000000 % 105)) {
             Coords deltaCoords = nextPiece();
             Coord coord        = {2, highest + 4};
             bool keepGoing     = true;
@@ -182,9 +208,26 @@ struct Parts {
                 vent++;
             }
             highest = std::max(highest, settlePiece(coord, deltaCoords));
+            if (piece % 15 == 0 && coord.first == 2) {
+                int my = *std::max_element(highests.begin(), highests.end());
+                if (my - highests[6] != goal) {
+
+                } else {
+                    std::cout << my - highests[6];
+                    std::cout << piece << "|" << highest - last << ":\t";
+                    for (auto h : highests)
+                        std::cout << my - h << "\t";
+                    std::cout << std::endl;
+                    last = highest;
+                }
+            }
             piece++;
-            // print();
         }
+        std::cout << "result="
+                  << highest + 1
+                         + ((long)1000000000000 - start) / pattern * growth
+                  << std::endl;
+
         return highest + 1;
     }
     int part2() { return 0; }
