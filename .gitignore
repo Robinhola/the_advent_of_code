@@ -233,6 +233,7 @@ cython_debug/
 *.exe
 *.out
 *.app
+*.dSYM
 main
 
 # Rubbish
